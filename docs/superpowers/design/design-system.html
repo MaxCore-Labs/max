@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Max Design System</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--foreground); font-size: 14px; line-height: 1.5; }
+  h1, h2, h3, p, ul, dl, dd, table { margin: 0; padding: 0; }
+  p { text-wrap: pretty; }
+  a, button { outline: none; }
+  ul { list-style: none; }
+  button, input, textarea { font: inherit; color: inherit; }
+  .mono { font-family: var(--app-font-mono); }
+  .muted { color: var(--muted); }
+  .bg-surface { background: var(--surface); }
+  .bg-background { background: var(--background); }
+
+  /* Khung trang xem */
+  main { max-width: 1120px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 40px; }
+  @media (min-width: 640px) { main { padding: 24px; } }
+  .page-title { font-size: 20px; font-weight: 600; }
+  .block > h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .block > .lead { color: var(--muted); margin-bottom: 16px; max-width: 75ch; }
+  .grid { display: grid; gap: 12px; }
+  .cols-2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  .cols-3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+  .cols-4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+  .row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px 24px; }
+  .state { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .sub { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+
+  /* Icon Lucide: nét 2px, ba cỡ */
+  .i14 { width: 14px; height: 14px; flex-shrink: 0; }
+  .i16 { width: 16px; height: 16px; flex-shrink: 0; }
+  .i20 { width: 20px; height: 20px; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 1s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+  /* ---------- Card ---------- */
+  .card { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 16px; min-width: 0; }
+  @media (min-width: 640px) { .card { padding: 20px; } }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .card-title { font-size: 16px; font-weight: 600; text-wrap: balance; min-width: 0; }
+  .card-title.with-action { min-height: 40px; display: flex; align-items: center; }
+  .card.flush { padding: 0; overflow: hidden; }
+
+  /* ---------- Nút ---------- */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--control-h); max-width: 100%; padding: 8px 16px; border: 1px solid transparent; border-radius: var(--radius); font-size: 14px; font-weight: 500; line-height: 1.25; text-align: center; overflow-wrap: anywhere; cursor: pointer; outline: none; transition: background-color .15s, color .15s; }
+  .btn-outline { border-color: var(--border-strong); background: var(--surface); color: var(--foreground); }
+  .btn-outline:hover, .btn-outline.is-hover { background: var(--button-hover); }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:hover, .btn-primary.is-hover { background: var(--primary-hover); }
+  .btn-secondary { background: var(--secondary); color: var(--foreground); }
+  .btn-secondary:hover, .btn-secondary.is-hover { background: var(--secondary-hover); }
+  .btn-ghost { background: transparent; color: var(--muted); }
+  .btn-ghost:hover, .btn-ghost.is-hover { background: color-mix(in srgb, var(--foreground) 5%, transparent); color: var(--foreground); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger); }
+  .btn-danger:hover, .btn-danger.is-hover { background: var(--danger-bg-hover); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn[aria-busy="true"] { cursor: progress; }
+  .btn-icon { width: var(--control-h); padding: 0; color: var(--muted); }
+  .btn-icon:hover { color: var(--foreground); }
+  .btn-dense { min-height: var(--control-h-dense); width: var(--control-h-dense); padding: 0; border-radius: var(--radius-sm); }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* ---------- Badge trạng thái ---------- */
+  .badge { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border-radius: var(--radius-full); padding: 4px 10px; font-size: 12px; font-weight: 500; line-height: 16px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .05); }
+  .t-neutral { background: var(--neutral-bg); color: var(--neutral); }
+  .t-success { background: var(--success-bg); color: var(--success); }
+  .t-warning { background: var(--warning-bg); color: var(--warning); }
+  .t-error { background: var(--error-bg); color: var(--error-strong); }
+  .badge-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .status-table { width: 100%; border-collapse: collapse; }
+  .status-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 0 12px 8px 0; white-space: nowrap; }
+  .status-table td { padding: 8px 12px 8px 0; vertical-align: top; border-top: 1px solid var(--border-strong); }
+  .status-table td:first-child { white-space: nowrap; font-weight: 500; }
+
+  /* ---------- Ô nhập ---------- */
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .field label { width: fit-content; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .input { width: 100%; height: var(--control-h); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 0 16px; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  textarea.input { height: auto; min-height: 88px; padding: 10px 16px; resize: vertical; }
+  .input::placeholder { color: var(--muted); }
+  .input:focus, .input.is-focus { border-color: var(--border-focus); box-shadow: 0 0 0 2px var(--ring-focus); }
+  .input.is-error { border-color: var(--error); }
+  .input.is-error:focus { box-shadow: 0 0 0 2px var(--error-ring); }
+  .input:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { min-height: 16px; font-size: 12px; line-height: 16px; color: var(--muted); }
+  .hint.err { color: var(--error-text); }
+  .form-grid { display: grid; gap: 20px 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+  @media (max-width: 767px) {
+    .btn { min-height: var(--control-h-touch); }
+    .btn-icon { width: var(--control-h-touch); }
+    .btn-dense { min-height: var(--control-h-dense); width: var(--control-h-dense); }
+    .input { height: var(--control-h-touch); font-size: 16px; }
+    textarea.input { height: auto; }
+  }
+
+  /* ---------- Dòng danh sách ---------- */
+  .list { display: flex; flex-direction: column; gap: 2px; }
+  .list-row { display: flex; align-items: center; gap: 12px; border-radius: var(--radius); padding: 8px 12px; min-width: 0; }
+  .list-row:hover, .list-row.is-hover { background: var(--item-hover); }
+  .list-row .body { min-width: 0; flex: 1; }
+  .list-row .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-row .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius); background: var(--background); font-size: 14px; font-weight: 600; color: var(--foreground); }
+  .list-row:hover .avatar, .list-row.is-hover .avatar { background: var(--surface); }
+
+  /* ---------- Bảng dày ---------- */
+  .table-wrap { overflow-x: auto; }
+  .dtable { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14px; }
+  .dtable th { height: 40px; padding: 0 16px; background: var(--surface); text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; border-bottom: 1px solid var(--border-strong); }
+  .dtable td { height: var(--row-h-dense); padding: 0 16px; background: var(--surface); white-space: nowrap; border-bottom: 1px solid var(--border-strong); }
+  .dtable tr:last-child td { border-bottom: 0; }
+  .dtable tbody tr:hover td, .dtable tbody tr.is-hover td { background: var(--surface-hover); }
+  .dtable th:first-child, .dtable td:first-child { position: sticky; left: 0; z-index: 1; }
+  @media (min-width: 640px) { .dtable th, .dtable td { padding: 0 20px; } }
+  .dtable .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .dtable .name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+
+  /* ---------- Hộp thoại ---------- */
+  .stage { display: flex; justify-content: center; border-radius: var(--radius-lg); background: rgb(0 0 0 / .3); padding: 32px 16px; }
+  .dialog { width: 100%; max-width: 448px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 24px; box-shadow: var(--elevation-modal); }
+  .dialog h3 { font-size: 16px; font-weight: 600; }
+  .dialog p { margin-top: 8px; color: var(--muted); }
+  .dialog .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+
+  /* ---------- Trạng thái rỗng ---------- */
+  .empty { padding: 24px 0; text-align: center; color: var(--muted); }
+  .link { border: 0; background: none; padding: 0; font-weight: 500; color: var(--foreground); cursor: pointer; text-underline-offset: 4px; }
+  .link:hover { text-decoration: underline; }
+  .skeleton { height: 12px; border-radius: var(--radius-full); background: var(--background-hover); }
+
+  /* ---------- Nền tảng: ô màu, thang ---------- */
+  .swatch { border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+  .swatch .chip { height: 56px; border-bottom: 1px solid var(--border-strong); }
+  .swatch .info { padding: 8px 12px; }
+  .swatch .name { font-size: 12px; font-weight: 500; }
+  .swatch .hex { font-size: 12px; color: var(--muted); }
+  .pairs { width: 100%; border-collapse: collapse; }
+  .pairs td { padding: 8px 12px 8px 0; border-top: 1px solid var(--border-strong); }
+  .pairs .ratio { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sample { display: inline-block; border-radius: var(--radius-sm); padding: 2px 8px; }
+  .type-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--border-strong); }
+  .type-row:first-child { border-top: 0; }
+  .type-row .tag { font-size: 12px; color: var(--muted); }
+  .scale { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+  .scale .item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .scale .bar { background: var(--primary); height: 12px; border-radius: 2px; }
+  .scale .box { width: 64px; height: 64px; border: 1px solid var(--border-strong); background: var(--surface); }
+  .icon-cell { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .icon-cell svg { color: var(--foreground); }
+
+  /* ---------- Thành phần riêng của Max ---------- */
+  .nav { display: flex; flex-direction: column; gap: 2px; width: 100%; max-width: 240px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); padding: 8px; }
+  .nav-item { display: flex; align-items: center; gap: 12px; height: var(--control-h); border-radius: var(--radius); padding: 0 12px; color: var(--muted); font-weight: 500; text-decoration: none; }
+  .nav-item:hover { background: var(--item-hover); color: var(--foreground); }
+  .nav-item.is-active { background: var(--secondary); color: var(--foreground); }
+  .nav-item .count { margin-left: auto; min-width: 20px; height: 20px; border-radius: var(--radius-full); background: var(--primary); color: var(--primary-foreground); padding: 0 6px; font-size: 12px; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+  .tabbar { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; max-width: 375px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); padding: 4px; }
+  .tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 52px; border-radius: var(--radius); color: var(--muted); font-size: 12px; font-weight: 500; text-decoration: none; }
+  .tab.is-active { color: var(--foreground); }
+  .tab .dot { position: absolute; top: 6px; left: calc(50% + 6px); min-width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--primary); color: var(--primary-foreground); padding: 0 4px; font-size: 10px; line-height: 16px; text-align: center; }
+
+  .engine { display: inline-flex; align-items: center; gap: 8px; height: 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-full); background: var(--surface); padding: 0 12px; font-size: 12px; white-space: nowrap; }
+  .engine b { font-weight: 600; }
+  .engine .led { width: 8px; height: 8px; border-radius: 50%; }
+  .led.ok { background: var(--success); } .led.wait { background: var(--neutral); } .led.bad { background: var(--error-strong); }
+
+  .quota { display: flex; flex-direction: column; gap: 8px; }
+  .quota .top { display: flex; justify-content: space-between; gap: 12px; }
+  .quota .label { font-weight: 500; }
+  .quota .value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .quota .track { position: relative; height: 8px; border-radius: var(--radius-full); background: var(--background-hover); overflow: hidden; }
+  .quota .fill { height: 100%; border-radius: var(--radius-full); background: var(--primary); }
+  .quota .fill.stopped { background: var(--neutral); }
+  .quota .mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--surface); }
+  .quota .note { font-size: 12px; color: var(--muted); }
+
+  .approval .card-head { flex-wrap: wrap; }
+  .approval .who { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 240px; }
+  .approval .who .txt { min-width: 0; }
+  .approval .who .t { font-weight: 600; }
+  .approval .who .s { font-size: 12px; color: var(--muted); }
+  .dl-wrap { container-type: inline-size; margin: 16px 0; }
+  .dl { display: grid; grid-template-columns: 96px 1fr; gap: 8px 12px; }
+  @container (max-width: 383px) { .dl { grid-template-columns: 1fr; gap: 2px; } .dl dd { margin-bottom: 10px; } .dl dd:last-child { margin-bottom: 0; } }
+  .dl dt { color: var(--muted); }
+  .dl dd { min-width: 0; overflow-wrap: anywhere; }
+  .quote { border-radius: var(--radius); background: var(--background); padding: 12px; }
+  .approval .foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .approval .foot .exp { font-size: 12px; color: var(--muted); }
+
+  .bubble-row { display: flex; }
+  .bubble-row.me { justify-content: flex-end; }
+  .bubble { max-width: min(560px, 85%); border-radius: var(--radius-lg); padding: 10px 14px; overflow-wrap: anywhere; }
+  .bubble.me { background: var(--secondary); }
+  .bubble.agent { border: 1px solid var(--border-strong); background: var(--surface); }
+  .toolchip { display: inline-flex; align-items: center; gap: 6px; height: 28px; margin-top: 8px; border-radius: var(--radius-sm); background: var(--background); padding: 0 8px; font-size: 12px; color: var(--muted); max-width: 100%; }
+  .toolchip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+
+  <header>
+    <h1 class="page-title">Max Design System</h1>
+    <p class="muted">Bản xem để duyệt. Phẳng, trung tính, nền sáng. Màu chỉ dùng để báo trạng thái. Icon: Lucide 1.72.0.</p>
+  </header>
+
+  <!-- ============ MÀU ============ -->
+  <section class="block">
+    <h2>Màu</h2>
+    <p class="lead">Mọi màu là token trong <span class="mono">tokens.css</span>. Component không viết cứng mã màu.</p>
+
+    <div class="stack">
+      <div class="grid cols-4">
+        <div class="swatch"><div class="chip" style="background:var(--background)"></div><div class="info"><div class="name">background</div><div class="hex mono">#f4f4f6 · nền trang</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface)"></div><div class="info"><div class="name">surface</div><div class="hex mono">#ffffff · nền card</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--foreground)"></div><div class="info"><div class="name">foreground</div><div class="hex mono">#2c2c2c · chữ chính</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--muted)"></div><div class="info"><div class="name">muted</div><div class="hex mono">#707070 · chữ phụ</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--primary)"></div><div class="info"><div class="name">primary</div><div class="hex mono">#181818 · màu nhấn</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--secondary)"></div><div class="info"><div class="name">secondary</div><div class="hex mono">#e7e8ec · nút phụ, mục đang chọn</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--border-strong)"></div><div class="info"><div class="name">border-strong</div><div class="hex mono">#eaeaea · viền ô nhập, nút</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--border)"></div><div class="info"><div class="name">border</div><div class="hex mono">#f7f7f8 · viền card</div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Bốn tông trạng thái</h3></div>
+        <table class="pairs">
+          <tr><td><span class="sample t-neutral">Xếp hàng, đang chạy, tạm nghỉ</span></td><td class="muted">Xám: chờ hoặc đang chạy, không ai phải làm gì</td><td class="ratio">7,02:1</td></tr>
+          <tr><td><span class="sample t-warning">Chờ duyệt, agent hỏi</span></td><td class="muted">Hổ phách: cần chủ nhân</td><td class="ratio">4,85:1</td></tr>
+          <tr><td><span class="sample t-error">Lỗi, quá giờ, mất đăng nhập</span></td><td class="muted">Đỏ: hỏng, phải xử lý</td><td class="ratio">5,87:1</td></tr>
+          <tr><td><span class="sample t-success">Xong, sẵn sàng</span></td><td class="muted">Xanh lá: đã xong, đang ổn</td><td class="ratio">5,09:1</td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Chữ trên nền</h3></div>
+        <table class="pairs">
+          <tr><td>Chữ chính trên card</td><td class="muted mono">foreground / surface</td><td class="ratio">13,97:1</td></tr>
+          <tr><td>Chữ chính trên nền trang</td><td class="muted mono">foreground / background</td><td class="ratio">12,71:1</td></tr>
+          <tr><td><span class="muted">Chữ phụ trên card</span></td><td class="muted mono">muted / surface</td><td class="ratio">4,95:1</td></tr>
+          <tr><td><span class="muted">Chữ phụ trên nền trang</span></td><td class="muted mono">muted / background</td><td class="ratio">4,51:1</td></tr>
+          <tr><td><span class="sample" style="background:var(--primary);color:var(--primary-foreground)">Chữ trên nút chính</span></td><td class="muted mono">primary-foreground / primary</td><td class="ratio">17,76:1</td></tr>
+          <tr><td><span class="sample" style="background:var(--danger-bg);color:var(--danger)">Chữ trên nút nguy hiểm</span></td><td class="muted mono">danger / danger-bg</td><td class="ratio">5,21:1</td></tr>
+          <tr><td><span style="color:var(--error-text)">Câu lỗi dưới ô nhập</span></td><td class="muted mono">error-text / surface</td><td class="ratio">4,77:1</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CHỮ ============ -->
+  <section class="block">
+    <h2>Chữ</h2>
+    <p class="lead">Một font: Inter. Phân vai bằng độ đậm 400, 500, 600. Sáu cỡ, không cỡ nào khác.</p>
+    <div class="card">
+      <div class="type-row"><span class="tag">xl · 20 / 600</span><span style="font-size:20px;font-weight:600">Tên trang: Hoạt động của các agent</span></div>
+      <div class="type-row"><span class="tag">lg · 18 / 600</span><span style="font-size:18px;font-weight:600">Tiêu đề khối: Việc đang chờ bạn duyệt</span></div>
+      <div class="type-row"><span class="tag">base · 16 / 600</span><span style="font-size:16px;font-weight:600">Tiêu đề card: Hạn mức của gói</span></div>
+      <div class="type-row"><span class="tag">sm · 14 / 400</span><span>Chữ nội dung mặc định: Trợ lý nghiên cứu đã đọc xong 12 nguồn và ghi kết quả vào thư mục tri thức.</span></div>
+      <div class="type-row"><span class="tag">sm · 14 / 500</span><span style="font-weight:500">Nhãn ô nhập, chữ trên nút, tên trong dòng</span></div>
+      <div class="type-row"><span class="tag">xs · 12 / 400</span><span class="muted" style="font-size:12px">Chữ phụ, dấu thời gian: 5 phút trước · 2.480 token · lượt 7</span></div>
+      <div class="type-row"><span class="tag">mono · 12</span><span class="mono" style="font-size:12px">run_01JCX4M2 · wiki/san-pham/bang-gia.md · 184.200 token</span></div>
+    </div>
+  </section>
+
+  <!-- ============ KHOẢNG CÁCH, BO GÓC, VIỀN, BÓNG ============ -->
+  <section class="block">
+    <h2>Khoảng cách, bo góc, viền, bóng</h2>
+    <p class="lead">Một thang khoảng cách, bốn bậc bo góc, hai vai viền, hai bậc bóng. Bóng chỉ dành cho lớp nổi.</p>
+    <div class="grid cols-2">
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Thang khoảng cách (px)</h3></div>
+        <div class="scale">
+          <div class="item"><div class="bar" style="width:4px"></div>4</div>
+          <div class="item"><div class="bar" style="width:8px"></div>8</div>
+          <div class="item"><div class="bar" style="width:12px"></div>12</div>
+          <div class="item"><div class="bar" style="width:16px"></div>16</div>
+          <div class="item"><div class="bar" style="width:20px"></div>20</div>
+          <div class="item"><div class="bar" style="width:24px"></div>24</div>
+          <div class="item"><div class="bar" style="width:32px"></div>32</div>
+          <div class="item"><div class="bar" style="width:40px"></div>40</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Bo góc</h3></div>
+        <div class="scale">
+          <div class="item"><div class="box" style="border-radius:8px"></div>8 · nút nhỏ</div>
+          <div class="item"><div class="box" style="border-radius:12px"></div>12 · nút, ô nhập</div>
+          <div class="item"><div class="box" style="border-radius:16px"></div>16 · card</div>
+          <div class="item"><div class="box" style="border-radius:9999px"></div>tròn · badge</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Viền</h3></div>
+        <div class="scale">
+          <div class="item"><div class="box" style="width:120px;border-radius:12px;border-color:var(--border)"></div>border · viền card</div>
+          <div class="item"><div class="box" style="width:120px;border-radius:12px"></div>border-strong · ô nhập, nút</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Bóng</h3></div>
+        <div class="scale" style="gap:32px;padding:8px 8px 20px">
+          <div class="item"><div class="box" style="width:120px;border-radius:16px;border-color:var(--border);box-shadow:var(--elevation-popover)"></div>menu, thông báo</div>
+          <div class="item"><div class="box" style="width:120px;border-radius:16px;border-color:var(--border);box-shadow:var(--elevation-modal)"></div>hộp thoại</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ICON ============ -->
+  <section class="block">
+    <h2>Icon</h2>
+    <p class="lead">Chỉ một bộ: Lucide, nét 2px, màu theo chữ. Ba cỡ: 14px trong badge, 16px trong nút và mục điều hướng, 20px trên thanh dưới của điện thoại.</p>
+    <div class="card">
+      <div class="grid cols-4">
+        <div class="icon-cell"><i data-lucide="message-square" class="i16"></i>Chat · message-square</div>
+        <div class="icon-cell"><i data-lucide="inbox" class="i16"></i>Inbox · inbox</div>
+        <div class="icon-cell"><i data-lucide="bot" class="i16"></i>Agents · bot</div>
+        <div class="icon-cell"><i data-lucide="list-checks" class="i16"></i>Việc · list-checks</div>
+        <div class="icon-cell"><i data-lucide="activity" class="i16"></i>Hoạt động · activity</div>
+        <div class="icon-cell"><i data-lucide="book-open" class="i16"></i>Tri thức · book-open</div>
+        <div class="icon-cell"><i data-lucide="gauge" class="i16"></i>Mức dùng · gauge</div>
+        <div class="icon-cell"><i data-lucide="settings" class="i16"></i>Hệ thống · settings</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ NÚT ============ -->
+  <section class="block">
+    <h2>Nút</h2>
+    <p class="lead">Bốn dạng. Nút viền là mặc định. Mỗi khu chỉ có một nút chính. Nút nguy hiểm là nền đỏ mờ, không đỏ đặc. Cao 40px, 44px trên điện thoại.</p>
+    <div class="card">
+      <div class="row">
+        <div><p class="state">Viền (mặc định)</p><button class="btn btn-outline"><i data-lucide="plus" class="i16"></i>Thêm agent</button></div>
+        <div><p class="state">Chính</p><button class="btn btn-primary"><i data-lucide="check" class="i16"></i>Cho phép</button></div>
+        <div><p class="state">Phụ</p><button class="btn btn-secondary">Huỷ</button></div>
+        <div><p class="state">Ghost</p><button class="btn btn-ghost">Xem tất cả</button></div>
+        <div><p class="state">Nguy hiểm</p><button class="btn btn-danger"><i data-lucide="trash-2" class="i16"></i>Xoá agent</button></div>
+        <div><p class="state">Chỉ icon</p><button class="btn btn-outline btn-icon" aria-label="Lọc danh sách"><i data-lucide="sliders-horizontal" class="i16"></i></button></div>
+        <div><p class="state">Nhỏ, trong bảng dày</p><button class="btn btn-ghost btn-dense" aria-label="Thao tác khác"><i data-lucide="ellipsis" class="i16"></i></button></div>
+      </div>
+      <div class="row" style="margin-top:24px">
+        <div inert data-demo-state="hover"><p class="state">Rê: viền</p><button class="btn btn-outline is-hover">Thêm agent</button></div>
+        <div inert data-demo-state="hover"><p class="state">Rê: chính</p><button class="btn btn-primary is-hover">Cho phép</button></div>
+        <div inert data-demo-state="hover"><p class="state">Rê: phụ</p><button class="btn btn-secondary is-hover">Huỷ</button></div>
+        <div inert data-demo-state="hover"><p class="state">Rê: ghost</p><button class="btn btn-ghost is-hover">Xem tất cả</button></div>
+        <div inert data-demo-state="hover"><p class="state">Rê: nguy hiểm</p><button class="btn btn-danger is-hover">Xoá agent</button></div>
+        <div inert data-demo-state="disabled"><p class="state">Khoá</p><button class="btn btn-primary" disabled>Cho phép</button></div>
+        <div inert data-demo-state="loading"><p class="state">Đang xử lý</p><button class="btn btn-primary" aria-busy="true" aria-disabled="true"><i data-lucide="loader-circle" class="i16 spin"></i>Cho phép</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BADGE TRẠNG THÁI ============ -->
+  <section class="block">
+    <h2>Badge trạng thái</h2>
+    <p class="lead">Một bảng ánh xạ cho cả app. Bốn tông; trạng thái cùng tông tách nhau bằng icon. Badge luôn có chữ. Hết hạn mức và bị ngắt là xám, không đỏ.</p>
+    <div class="card">
+      <div class="table-wrap">
+        <table class="status-table">
+          <thead><tr><th>Đối tượng</th><th>Trạng thái</th></tr></thead>
+          <tbody>
+            <tr><td>Run</td><td><div class="badge-list">
+              <span class="badge t-neutral"><i data-lucide="loader-circle" class="i14 spin"></i>Đang chạy</span>
+              <span class="badge t-neutral"><i data-lucide="circle-pause" class="i14"></i>Tạm nghỉ</span>
+              <span class="badge t-neutral"><i data-lucide="hourglass" class="i14"></i>Hết hạn mức</span>
+              <span class="badge t-neutral"><i data-lucide="unplug" class="i14"></i>Bị ngắt</span>
+              <span class="badge t-neutral"><i data-lucide="ban" class="i14"></i>Đã huỷ</span>
+              <span class="badge t-error"><i data-lucide="circle-x" class="i14"></i>Lỗi</span>
+              <span class="badge t-error"><i data-lucide="timer-off" class="i14"></i>Quá giờ</span>
+              <span class="badge t-error"><i data-lucide="octagon-x" class="i14"></i>Hết lượt</span>
+              <span class="badge t-success"><i data-lucide="circle-check" class="i14"></i>Xong</span>
+            </div></td></tr>
+            <tr><td>Task</td><td><div class="badge-list">
+              <span class="badge t-neutral"><i data-lucide="circle" class="i14"></i>Cần làm</span>
+              <span class="badge t-neutral"><i data-lucide="circle-dot" class="i14"></i>Đang làm</span>
+              <span class="badge t-neutral"><i data-lucide="circle-ellipsis" class="i14"></i>Đang review</span>
+              <span class="badge t-neutral"><i data-lucide="clock" class="i14"></i>Chờ việc khác</span>
+              <span class="badge t-warning"><i data-lucide="hand" class="i14"></i>Cần bạn</span>
+              <span class="badge t-error"><i data-lucide="triangle-alert" class="i14"></i>Bị kẹt</span>
+              <span class="badge t-error"><i data-lucide="circle-x" class="i14"></i>Lỗi</span>
+              <span class="badge t-neutral"><i data-lucide="ban" class="i14"></i>Đã huỷ</span>
+              <span class="badge t-success"><i data-lucide="circle-check" class="i14"></i>Xong</span>
+            </div></td></tr>
+            <tr><td>Duyệt và câu hỏi</td><td><div class="badge-list">
+              <span class="badge t-warning"><i data-lucide="shield-alert" class="i14"></i>Chờ duyệt</span>
+              <span class="badge t-warning"><i data-lucide="message-circle-question-mark" class="i14"></i>Agent hỏi</span>
+              <span class="badge t-warning"><i data-lucide="circle-question-mark" class="i14"></i>Chưa rõ đã gửi</span>
+              <span class="badge t-success"><i data-lucide="check" class="i14"></i>Đã cho phép</span>
+              <span class="badge t-neutral"><i data-lucide="x" class="i14"></i>Đã từ chối</span>
+              <span class="badge t-neutral"><i data-lucide="clock" class="i14"></i>Hết hạn</span>
+            </div></td></tr>
+            <tr><td>Agent</td><td><div class="badge-list">
+              <span class="badge t-success"><i data-lucide="circle-check" class="i14"></i>Hoạt động</span>
+              <span class="badge t-neutral"><i data-lucide="pause" class="i14"></i>Tạm dừng</span>
+              <span class="badge t-neutral"><i data-lucide="hourglass" class="i14"></i>Hết phần hạn mức</span>
+            </div></td></tr>
+            <tr><td>Engine</td><td><div class="badge-list">
+              <span class="badge t-success"><i data-lucide="circle-check" class="i14"></i>Sẵn sàng</span>
+              <span class="badge t-neutral"><i data-lucide="hourglass" class="i14"></i>Hết hạn mức</span>
+              <span class="badge t-error"><i data-lucide="plug-zap" class="i14"></i>Mất đăng nhập</span>
+              <span class="badge t-neutral"><i data-lucide="ban" class="i14"></i>Đã tắt</span>
+            </div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Ô NHẬP ============ -->
+  <section class="block">
+    <h2>Ô nhập</h2>
+    <p class="lead">Nền trắng, viền <span class="mono">border-strong</span>. Đang gõ: viền gần đen kèm quầng mờ 2px. Lỗi: viền đỏ và một câu lỗi. Dòng dưới ô luôn giữ chỗ để form không nhảy.</p>
+    <div class="card">
+      <div class="form-grid">
+        <div><p class="state">Thường</p>
+          <div class="field"><label for="f1">Tên agent</label><input id="f1" class="input" value="Trợ lý nghiên cứu"><p class="hint">Hiện trong danh sách và trong chat.</p></div></div>
+        <div inert data-demo-state="focus"><p class="state">Đang gõ</p>
+          <div class="field"><label for="f2">Tên agent</label><input id="f2" class="input is-focus" value="Trợ lý ngh"><p class="hint"></p></div></div>
+        <div><p class="state">Lỗi</p>
+          <div class="field"><label for="f3">Số chỗ của agy</label><input id="f3" class="input is-error" value="12"><p class="hint err">Số chỗ phải từ 1 đến 8.</p></div></div>
+        <div inert data-demo-state="disabled"><p class="state">Khoá</p>
+          <div class="field"><label for="f4">Mã agent</label><input id="f4" class="input mono" value="researcher-01" disabled><p class="hint">Không đổi được sau khi tạo.</p></div></div>
+      </div>
+      <div style="margin-top:20px;max-width:560px">
+        <p class="state">Nhiều dòng</p>
+        <div class="field"><label for="f5">Chỉ dẫn riêng</label><textarea id="f5" class="input" rows="3">Ưu tiên nguồn tiếng Việt. Mỗi kết luận kèm đường dẫn nguồn.</textarea><p class="hint"></p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CARD ============ -->
+  <section class="block">
+    <h2>Card</h2>
+    <p class="lead">Viền tóc 1px, bo 16px, không bóng. Đệm 20px, 16px trên điện thoại. Nút hành động nằm ở góc phải phần đầu.</p>
+    <div class="grid cols-2">
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Bản tin sáng</h3></div>
+        <p>3 việc xong trong đêm, 2 việc chờ bạn duyệt, không việc nào hỏng.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3 class="card-title with-action">Lịch chạy định kỳ</h3><button class="btn btn-outline"><i data-lucide="plus" class="i16"></i>Thêm lịch</button></div>
+        <p class="muted">Card có nút: tiêu đề cao bằng nút, nút bám góc trên phải.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DÒNG DANH SÁCH VÀ BẢNG DÀY ============ -->
+  <section class="block">
+    <h2>Dòng danh sách và bảng dày</h2>
+    <p class="lead">Danh sách thưa cho inbox, tri thức. Bảng dày cho agents, việc, hoạt động: mỗi dòng cao đúng 40px để ảo hóa được hàng nghìn dòng; số căn phải, thẳng cột.</p>
+    <div class="stack">
+      <div class="card">
+        <div class="card-head"><h3 class="card-title">Danh sách thưa</h3></div>
+        <ul class="list">
+          <li class="list-row"><span class="avatar">NC</span><div class="body"><p class="title">Trợ lý nghiên cứu</p><p class="meta">Đã đọc 12 nguồn · 5 phút trước</p></div><span class="badge t-success"><i data-lucide="circle-check" class="i14"></i>Xong</span></li>
+          <li class="list-row is-hover"><span class="avatar">BH</span><div class="body"><p class="title">Trợ lý bán hàng muốn gửi email cho Công ty TNHH Thương mại Dịch vụ Minh Phát</p><p class="meta">Dòng đang rê · 12 phút trước</p></div><span class="badge t-warning"><i data-lucide="shield-alert" class="i14"></i>Chờ duyệt</span></li>
+          <li class="list-row"><span class="avatar">KT</span><div class="body"><p class="title">Trợ lý kế toán</p><p class="meta">Không lấy được sao kê · 1 giờ trước</p></div><span class="badge t-error"><i data-lucide="circle-x" class="i14"></i>Lỗi</span></li>
+        </ul>
+      </div>
+      <div class="card flush">
+        <div class="table-wrap">
+          <table class="dtable">
+            <thead><tr><th>Agent</th><th>Trạng thái</th><th>Engine</th><th class="num">Token hôm nay</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="name">Chánh văn phòng</td><td><span class="badge t-neutral"><i data-lucide="loader-circle" class="i14 spin"></i>Đang chạy</span></td><td class="mono">agy</td><td class="num">184.200</td><td><button class="btn btn-ghost btn-dense" aria-label="Thao tác khác"><i data-lucide="ellipsis" class="i16"></i></button></td></tr>
+              <tr class="is-hover"><td class="name">Trợ lý nghiên cứu thị trường Đông Nam Á</td><td><span class="badge t-neutral"><i data-lucide="hourglass" class="i14"></i>Hết hạn mức</span></td><td class="mono">agy</td><td class="num">1.204.880</td><td><button class="btn btn-ghost btn-dense" aria-label="Thao tác khác"><i data-lucide="ellipsis" class="i16"></i></button></td></tr>
+              <tr><td class="name">Trợ lý kế toán</td><td><span class="badge t-error"><i data-lucide="circle-x" class="i14"></i>Lỗi</span></td><td class="mono">agy</td><td class="num">0</td><td><button class="btn btn-ghost btn-dense" aria-label="Thao tác khác"><i data-lucide="ellipsis" class="i16"></i></button></td></tr>
+              <tr><td class="name">Người viết</td><td><span class="badge t-neutral"><i data-lucide="pause" class="i14"></i>Tạm dừng</span></td><td class="mono">claude</td><td class="num">32.015</td><td><button class="btn btn-ghost btn-dense" aria-label="Thao tác khác"><i data-lucide="ellipsis" class="i16"></i></button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HỘP THOẠI ============ -->
+  <section class="block">
+    <h2>Hộp thoại</h2>
+    <p class="lead">Rộng tối đa 448px, giữa màn, nền phủ đen 30%. Nút nằm bên phải, nút huỷ đứng trước. Bấm ra ngoài hoặc Esc là đóng, trừ khi đang lưu.</p>
+    <div class="stage" inert data-demo-state="open">
+      <div class="dialog" role="alertdialog" aria-labelledby="dlg-t" aria-describedby="dlg-d">
+        <h3 id="dlg-t">Xoá agent "Trợ lý kế toán"?</h3>
+        <p id="dlg-d">2 việc đang giao cho agent này sẽ quay về hàng chờ của Chánh văn phòng. Ghi chú và lịch sử chạy vẫn được giữ.</p>
+        <div class="actions"><button class="btn btn-secondary">Huỷ</button><button class="btn btn-danger"><i data-lucide="trash-2" class="i16"></i>Xoá agent</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TRẠNG THÁI RỖNG, ĐANG TẢI ============ -->
+  <section class="block">
+    <h2>Trạng thái rỗng và đang tải</h2>
+    <p class="lead">Rỗng là một dòng chữ mờ, không hình, không nút. Rỗng do lọc thì có một lối ra. Đang tải là khung chờ, không hiện câu rỗng.</p>
+    <div class="grid cols-3">
+      <div class="card"><p class="state">Rỗng</p><p class="empty">Không có việc nào đang chờ bạn.</p></div>
+      <div class="card"><p class="state">Rỗng do lọc</p><p class="empty">Không có agent nào khớp "kế toán". <button class="link">Xoá tìm kiếm</button></p></div>
+      <div class="card"><p class="state">Đang tải</p><div class="stack" style="padding:16px 0"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:90%"></div><div class="skeleton" style="width:55%"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ THÀNH PHẦN RIÊNG CỦA MAX ============ -->
+  <section class="block">
+    <h2>Thành phần riêng của Max</h2>
+    <p class="lead">Ráp từ các nguyên tố ở trên, không thêm màu hay cỡ mới.</p>
+
+    <div class="stack" style="gap:24px">
+      <div>
+        <h3 class="sub">Điều hướng</h3>
+        <div class="row">
+          <div><p class="state">Sidebar, từ 1024px</p>
+            <nav class="nav" aria-label="Điều hướng chính">
+              <a class="nav-item is-active" href="#"><i data-lucide="message-square" class="i16"></i>Chat</a>
+              <a class="nav-item" href="#"><i data-lucide="inbox" class="i16"></i>Inbox<span class="count">3</span></a>
+              <a class="nav-item" href="#"><i data-lucide="bot" class="i16"></i>Agents</a>
+              <a class="nav-item" href="#"><i data-lucide="list-checks" class="i16"></i>Việc</a>
+              <a class="nav-item" href="#"><i data-lucide="activity" class="i16"></i>Hoạt động</a>
+              <a class="nav-item" href="#"><i data-lucide="book-open" class="i16"></i>Tri thức</a>
+              <a class="nav-item" href="#"><i data-lucide="gauge" class="i16"></i>Mức dùng</a>
+              <a class="nav-item" href="#"><i data-lucide="settings" class="i16"></i>Hệ thống</a>
+            </nav>
+          </div>
+          <div style="flex:1;min-width:min(100%,280px)"><p class="state">Thanh dưới, dưới 768px</p>
+            <nav class="tabbar" aria-label="Điều hướng trên điện thoại">
+              <a class="tab is-active" href="#"><i data-lucide="message-square" class="i20"></i>Chat</a>
+              <a class="tab" href="#"><i data-lucide="inbox" class="i20"></i>Inbox<span class="dot">3</span></a>
+              <a class="tab" href="#"><i data-lucide="list-checks" class="i20"></i>Việc</a>
+              <a class="tab" href="#"><i data-lucide="menu" class="i20"></i>Thêm</a>
+            </nav>
+            <p class="state" style="margin-top:24px">Trạng thái engine, trên thanh đầu trang</p>
+            <div class="stack" style="align-items:flex-start;gap:8px">
+              <span class="engine"><span class="led ok"></span><b>agy</b> 2/3 chỗ</span>
+              <span class="engine"><span class="led wait"></span><b>agy</b> mở lại 14:30</span>
+              <span class="engine"><span class="led bad"></span><b>agy</b> cần đăng nhập lại</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="sub">Thẻ duyệt</h3>
+        <div class="grid cols-2">
+          <div class="card approval">
+            <p class="state">Chờ duyệt</p>
+            <div class="card-head" style="margin-bottom:0">
+              <div class="who"><span class="avatar">BH</span><div class="txt"><p class="t">Trợ lý bán hàng muốn gửi email</p><p class="s">Việc: Chào giá gói Doanh nghiệp · 12 phút trước</p></div></div>
+              <span class="badge t-warning"><i data-lucide="shield-alert" class="i14"></i>Chờ duyệt</span>
+            </div>
+            <div class="dl-wrap"><dl class="dl">
+              <dt>Người nhận</dt><dd>mua-hang@minhphat.example</dd>
+              <dt>Tiêu đề</dt><dd>Báo giá gói Doanh nghiệp, hiệu lực đến 30/11</dd>
+              <dt>Nội dung</dt><dd class="quote">Chào anh Phát, em gửi anh báo giá gói Doanh nghiệp cho 25 người dùng: 12.500.000 đ mỗi tháng, chưa gồm thuế…</dd>
+            </dl></div>
+            <div class="foot"><span class="exp">Hết hạn sau 23 giờ</span><div class="btn-row"><button class="btn btn-outline">Từ chối</button><button class="btn btn-primary"><i data-lucide="check" class="i16"></i>Cho phép</button></div></div>
+          </div>
+          <div class="card approval">
+            <p class="state">Đã cho phép</p>
+            <div class="card-head" style="margin-bottom:0">
+              <div class="who"><span class="avatar">BH</span><div class="txt"><p class="t">Trợ lý bán hàng đã gửi email</p><p class="s">Việc: Chào giá gói Doanh nghiệp · 2 phút trước</p></div></div>
+              <span class="badge t-success"><i data-lucide="check" class="i14"></i>Đã cho phép</span>
+            </div>
+            <div class="dl-wrap"><dl class="dl">
+              <dt>Người nhận</dt><dd>mua-hang@minhphat.example</dd>
+              <dt>Tiêu đề</dt><dd>Báo giá gói Doanh nghiệp, hiệu lực đến 30/11</dd>
+            </dl></div>
+            <div class="foot"><span class="exp">Bạn cho phép lúc 09:42</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="sub">Thanh hạn mức</h3>
+        <div class="grid cols-3">
+          <div class="card"><p class="state">Bình thường</p>
+            <div class="quota"><div class="top"><span class="label">agy · cửa sổ 5 giờ</span><span class="value">62%</span></div>
+              <div class="track"><div class="fill" style="width:62%"></div><div class="mark" style="left:70%"></div></div>
+              <p class="note">Việc nền dừng ở 70%. Cửa sổ mới lúc 14:30.</p></div></div>
+          <div class="card"><p class="state">Chưa biết trần</p>
+            <div class="quota"><div class="top"><span class="label">agy · cửa sổ 5 giờ</span><span class="value">Đang học</span></div>
+              <div class="track"></div>
+              <p class="note">Chưa gặp giới hạn nào. Đã dùng 1.204.880 token.</p></div></div>
+          <div class="card"><p class="state">Hết hạn mức</p>
+            <div class="quota"><div class="top"><span class="label">agy · cửa sổ 5 giờ</span><span class="value">Mở lại 14:30</span></div>
+              <div class="track"><div class="fill stopped" style="width:100%"></div></div>
+              <p class="note">14 việc đang chờ, tự chạy lại khi mở.</p></div></div>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="sub">Tin nhắn trong chat</h3>
+        <div class="card">
+          <div class="stack">
+            <div class="bubble-row me"><div class="bubble me">Tìm giúp tôi 5 đối thủ bán phần mềm kế toán cho hộ kinh doanh.</div></div>
+            <div class="bubble-row"><div class="bubble agent">Tôi đã giao cho Trợ lý nghiên cứu. Kết quả sẽ có trong mục Việc.
+              <div><span class="toolchip"><i data-lucide="terminal" class="i14"></i><span>delegate · Trợ lý nghiên cứu</span></span></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+<script src="https://unpkg.com/lucide@1.72.0/dist/umd/lucide.min.js"></script>
+<script>lucide.createIcons();</script>
+</body>
+</html>
