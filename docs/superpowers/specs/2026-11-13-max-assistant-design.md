@@ -393,7 +393,7 @@ Không thành phần nào giữ trạng thái nghiệp vụ chỉ trong RAM. Ti�
 | Lớp | Chọn | Phiên bản đã kiểm |
 |---|---|---|
 | Backend + API | Go, 1 module, `CGO_ENABLED=0` **[CHỦ]** | Go 1.27 |
-| Engine | Ba CLI headless, mỗi cái một gói subscription **[CHỦ]** | `claude` 2.1.323; `codex-cli` 0.155.1; `agy` 1.5.8 |
+| Engine | Ba CLI headless, mỗi cái một gói subscription **[CHỦ]** | `claude` 2.1.323; `codex-cli` 0.155.1; `agy` 1.5.12 (cập nhật sau S0c từ 1.5.8 do manifest chính thức chỉ phục vụ bản build hiện hành) |
 | HTTP | `net/http` chuẩn + middleware tự viết | |
 | Hợp đồng API | OpenAPI 3.1 viết trước; `oapi-codegen` sinh strict server; `openapi-typescript` sinh type UI | v2.8.2; 7.13.0 |
 | DB | SQLite qua `modernc.org/sqlite` (thuần Go), WAL; `sqlc` sinh truy vấn có kiểu; `goose` chạy migration lúc boot | v1.62.0; v1.31.1; v3.30.1 |
@@ -552,24 +552,24 @@ type EngineCaps struct {
 
 Cột "đã kiểm" lấy từ `--help` của bản cài trên máy dev; mục ghi **[S0x]** là điều chưa biết, phải đo ở spike.
 
-| | `claude` 2.1.323 | `codex-cli` 0.155.1 | `agy` 1.5.8 |
+| | `claude` 2.1.323 | `codex-cli` 0.155.1 | `agy` 1.5.12 **[ĐÃ KIỂM S0c trên Linux]** |
 |---|---|---|---|
-| Chạy không tương tác | `claude -p` | `codex exec` | `agy -p` |
-| Luồng sự kiện máy đọc | `--output-format stream-json` | `--json` | `--output-format stream-json` |
-| Tiếp tục phiên | `--resume <id>` | `codex exec resume <id>` | `--conversation <id>` |
+| Chạy không tương tác | `claude -p` | `codex exec` | `agy acp` (ưu tiên) hoặc `agy --output-format stream-json -p="..."` |
+| Luồng sự kiện máy đọc | `--output-format stream-json` | `--json` | JSON-RPC hai chiều (`acp`) hoặc `--output-format stream-json` |
+| Tiếp tục phiên | `--resume <id>` | `codex exec resume <id>` | `session/load` (`acp`) hoặc `--conversation=<id>` |
 | Đầu ra có cấu trúc | `--json-schema` | `--output-schema <file>` | `--json-schema` |
 | Chọn model | `--model` | `-m` | `--model` (danh sách: `agy models`) |
-| Thư mục làm việc | cwd, `--add-dir` | `-C <dir>`, `--add-dir` | cwd, `--add-dir` |
-| Khai MCP server | `--mcp-config` + `--strict-mcp-config` (theo từng lần gọi) | `-c <key=value>` ghi đè cấu hình theo lần gọi; `--ignore-user-config` **[S0b: cú pháp]** | Mức HOME, khai một lần bằng `agy mcp add` (hỗ trợ stdio và http). Javis ghi nhận file này dùng chung cho mọi lượt chạy **[ĐÃ KIỂM docs/en/10]** |
-| Chặn từng lời gọi tool trước khi chạy | Hook `PreToolUse` + `--permission-prompts none` | Có cơ chế hook (help nhắc `--dangerously-bypass-hook-trust`) **[S0b: hook có từ chối được từng lời gọi không]** | Chế độ print: Javis ghi nhận agy "không tự dừng được tool của nó" **[ĐÃ KIỂM docs/en/07]**. Chế độ `agy acp` (Agent Client Protocol): giao thức có lời gọi xin quyền từ agent về client; **[S0c: `agy` có thật sự gửi nó cho tool dựng sẵn và tôn trọng lời từ chối không]** |
-| Thu hẹp tool dựng sẵn | `--tools` | **[S0b]** | **[S0c]** |
-| Giới hạn shell | Tắt hẳn được | `--sandbox read-only | workspace-write` | `--sandbox`; `--mode plan | accept-edits | auto` |
-| Đăng nhập (một lần, tương tác) | `claude auth login` | `codex login` | chạy `agy` một lần trong terminal |
+| Thư mục làm việc | cwd, `--add-dir` | `-C <dir>`, `--add-dir` | `cwd` của phiên, `--add-dir` |
+| Khai MCP server | `--mcp-config` + `--strict-mcp-config` (theo từng lần gọi) | `-c <key=value>` ghi đè cấu hình theo lần gọi; `--ignore-user-config` **[S0b: cú pháp]** | Chế độ `acp`: truyền mảng `mcpServers` theo từng phiên trong `session/new` và `session/load` **[ĐÃ KIỂM S0c]**. Chế độ `print`: mức HOME bằng `agy mcp add` **[ĐÃ KIỂM docs/en/10]** |
+| Chặn từng lời gọi tool trước khi chạy | Hook `PreToolUse` + `--permission-prompts none` | Có cơ chế hook (help nhắc `--dangerously-bypass-hook-trust`) **[S0b: hook có từ chối được từng lời gọi không]** | Chế độ `acp` (`1.5.12`): gửi `session/request_permission` và tôn trọng từ chối cho **100% lệnh shell (`run_command`, kể cả lệnh chỉ đọc)** và tool MCP, nhưng **không hỏi quyền** với `read_file`, `write_file`/`edit_file` và `search_web` **[ĐÃ KIỂM S0c]**. Chế độ `print`: không chặn trước được |
+| Thu hẹp tool dựng sẵn | `--tools` | **[S0b]** | Không có cờ tắt lẻ các tool không hỏi quyền; cổng quyền ACP chỉ mô phỏng được danh sách cho phép cho nhóm có xin quyền (tắt được shell) **[ĐÃ KIỂM S0c]** |
+| Giới hạn shell | Tắt hẳn được | `--sandbox read-only | workspace-write` | ACP chặn 100% `run_command` qua `session/request_permission`; `session/set_mode("plan")` chặn ghi file workspace cho vai trò `suggest` **[ĐÃ KIỂM S0c]** |
+| Đăng nhập (một lần, tương tác) | `claude auth login` | `codex login` | `agy acp --login` dưới **user hệ điều hành riêng (không có D-Bus keyring chung) hoặc trong container** **[ĐÃ KIỂM S0c]** |
 | Cờ bị cấm trong Max | `bypassPermissions`, `--dangerously-skip-permissions`, `--bare` | `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access` | `--dangerously-skip-permissions` (trừ khi chạy trong vùng cô lập ở 8.4.5) |
 
 **`agy acp`: đã bắt tay thử trên máy dev (chỉ lời gọi `initialize`, không gửi prompt)** **[ĐÃ KIỂM]**. `agy` 1.5.8 trả lời đúng giao thức phiên bản 1 và khai các năng lực: nạp lại phiên (`loadSession`), tiếp tục phiên (`resume`), liệt kê và đóng phiên, thêm thư mục làm việc, nhận ảnh, và **nối thêm system prompt** (`_meta.antigravity.systemPrompt.append`). Cách đăng nhập nó khai: tài khoản Google cá nhân, Gemini Enterprise, API key, Agent Platform. Phản hồi không khai hỗ trợ MCP kiểu http/sse, nên MCP của Max sẽ được nối kiểu stdio. Bắt tay không cho biết hai điều quan trọng nhất, phải đo bằng một lượt chạy thật ở S0c: `agy` có nhận danh sách MCP server theo từng phiên không, và nó có xin quyền trước khi chạy tool dựng sẵn không.
 
-**CLI của Max không bao giờ dùng HOME của chủ nhân.** Trên máy dev, cấu hình MCP mức HOME của `agy` đang chứa hơn chục MCP server cá nhân (điều khiển trình duyệt thật, GitHub, mạng xã hội...) và một số khóa API nằm ngay trong dòng lệnh **[ĐÃ KIỂM bằng `agy mcp list`]**. Nếu agent của Max chạy `agy` dưới HOME đó, mọi agent sẽ thấy toàn bộ các tool cá nhân này và đi vòng qua mọi cổng quyền của Max. Vì vậy: mỗi CLI chạy với HOME riêng trong `data/agent-home/<engine>` (hoặc user hệ điều hành riêng, hoặc trong container), **đăng nhập riêng một lần ở đó**, và chỉ có MCP server của Max. `max doctor` và mỗi lần khởi động engine đều kiểm: nếu CLI nhìn thấy MCP server nào ngoài của Max thì engine đó không được bật.
+**CLI của Max không bao giờ dùng HOME hay keyring của chủ nhân.** Trên máy dev, cấu hình MCP mức HOME của `agy` đang chứa hơn chục MCP server cá nhân (điều khiển trình duyệt thật, GitHub, mạng xã hội...) và một số khóa API nằm ngay trong dòng lệnh **[ĐÃ KIỂM bằng `agy mcp list`]**. Ngoài ra, S0c trên Linux chứng minh `agy` ưu tiên đọc/ghi token qua OS keyring (`zalando/go-keyring`: D-Bus Secret Service `/run/user/<uid>/bus` trên Linux, Keychain trên macOS, Credential Manager trên Windows) bất chấp biến `HOME`; chỉ khi UID không có D-Bus session bus (user dịch vụ riêng hoặc container) thì `agy` mới lưu file độc lập tại `$HOME/.gemini/antigravity-cli/antigravity-oauth-token` **[ĐÃ KIỂM S0c]**. Vì vậy: mỗi CLI chạy với HOME riêng trong `data/agent-home/<engine>`, và riêng **`agy` bắt buộc chạy dưới user hệ điều hành riêng (không có D-Bus keyring chung) hoặc trong container**, **đăng nhập riêng một lần ở đó**, và chỉ có MCP server của Max. `max doctor` và mỗi lần khởi động engine đều kiểm: nếu CLI nhìn thấy MCP server nào ngoài của Max thì engine đó không được bật.
 
 **Nhiều tiến trình của cùng một CLI chạy song song, mỗi cái cho một agent.** Với `agy` (và mọi CLI chỉ có cấu hình MCP dùng chung), Max không ghi cấu hình theo từng run. Nó khai **một lần** một MCP server kiểu stdio là chính binary Go: `max mcp`. Mỗi tiến trình CLI tự sinh một tiến trình `max mcp` con; tiến trình con này nối về Max qua unix socket và Max nhận ra nó thuộc run nào bằng **cây tiến trình** (nó là hậu duệ của tiến trình CLI mà Max đã sinh cho run đó), không dựa vào thứ gì model có thể tự khai. Nhờ vậy 3 agent chạy trên 3 tiến trình `agy` cùng lúc vẫn được kiểm quyền đúng theo từng agent, dù dùng chung một file cấu hình. Cách này dùng được cho cả ba CLI. **[S0c xác nhận: nhiều tiến trình `agy` chạy song song trên cùng HOME không giẫm nhau, và tiến trình MCP con nằm dưới cây tiến trình của CLI.]**
 
@@ -653,44 +653,49 @@ codex exec --json
 
 Driver có hai chế độ sau cùng một port. S0c quyết định chế độ nào là mặc định.
 
-**Chế độ A (ưu tiên): ACP.** Max sinh `agy acp` cho mỗi run và nói chuyện JSON-RPC qua stdio, đóng vai client:
+**Chế độ A (ưu tiên, đã chốt sau S0c): ACP.** Max sinh `agy acp --include-default-customizations=false` cho mỗi run (dưới user hệ điều hành riêng không có keyring chung hoặc trong container, `Setpgid: true`) và nói chuyện JSON-RPC qua stdio, đóng vai client:
 
 ```
-agy acp --add-dir <vùng chung>            # HOME = data/agent-home/agy
+agy acp --include-default-customizations=false [--add-dir <vùng chung>]   # HOME = data/agent-home/agy
   -> initialize
   -> session/new { cwd, mcpServers: [ { name: "max", command: "max", args: ["mcp"],
-                                        env: { MAX_RUN_TOKEN: <token của run> } } ] }
-     hoặc session/load | session/resume { sessionId }   (tiếp tục phiên của conversation)
-  -> session/prompt { nội dung của run }
-  <- session/update ...                  (chữ, lời gọi tool, kết quả: ánh xạ sang EngineEvent)
-  <- session/request_permission { tool, tham số }
-     -> Max gọi policy.Decide -> trả allow | deny      (cổng chặn trước khi tool chạy)
-  <- kết quả lượt -> đóng phiên, kết thúc tiến trình
+                                        env: [ { name: "MAX_RUN_TOKEN", value: <token của run> } ] } ],
+                   _meta: { antigravity: { systemPrompt: { append: <system.md> } } } }
+     hoặc session/load { sessionId, cwd, mcpServers: [ ... env mang MAX_RUN_TOKEN của run mới ... ] }
+     (bỏ qua các thông báo session/update phát lại lịch sử trước lúc gửi session/prompt)
+  [-> session/set_mode { sessionId, modeId: "plan" }]   (khi agent có autonomy = suggest)
+  -> session/prompt { sessionId, prompt: [ { type: "text", text: <nội dung của run> } ] }
+  <- session/update ...                  (chữ, lời gọi tool, kết quả: ánh xạ sang EngineEvent; lưu map toolCallId -> {kind, name, title})
+  <- session/request_permission { toolCall, options }
+     -> Max tra ngược toolCallId nếu thiếu kind/name -> đối chiếu allowlist mặc định từ chối -> chọn đúng kind allow_once | reject_once
+  <- kết quả lượt (kèm usage) -> đóng stdin, hạ nhóm tiến trình (-pgid), chờ đọc hết stdout/stderr rồi Wait()
 ```
 
-Nếu S0c xác nhận hai điều (MCP theo từng phiên, và xin quyền trước khi chạy tool dựng sẵn), thì `agy` đạt **mức 1** như `claude`: chạy được mọi vai trò, và token của run đi thẳng vào tiến trình MCP con, không cần nhận diện theo cây tiến trình.
+**Kết quả S0c trên Linux (`agy 1.5.12`) và phân loại mức an toàn:**
+- `agy acp` nhận `mcpServers` theo từng phiên (cả ở `session/new` lẫn `session/load`) và chặn được **100% lệnh shell (`run_command`, `kind: "execute"`, kể cả lệnh chỉ đọc)** qua `session/request_permission`, đồng thời chặn được ghi file workspace cho vai trò `suggest` khi đặt `modeId: "plan"`. Tuy nhiên, trên `1.5.12` các tool dựng sẵn `read_file` (đọc cả ngoài `cwd`), `write_file`/`edit_file` (ở mode `"default"`) và `search_web` (truy vấn mạng ra ngoài) **không gửi `session/request_permission`**. Do đó Max chọn **Chế độ A (`ModeACP`)** làm giao thức điều khiển chính, nhưng vẫn giữ `agy` ở **mức 3** trong bảng 8.4.5 (`PreToolGate = false`, `ToolAllowlist = false`, `PerRunMCP = true`, `Resume = true`).
+- **Bảo vệ hai lớp cho `MAX_RUN_TOKEN`:** Vì `MAX_RUN_TOKEN` nằm trong biến môi trường của tiến trình `max mcp` và mọi run của `agy` dùng chung một user hệ điều hành (8.4.5), một tiến trình shell của run khác cùng UID có thể đọc `/proc/<pid>/environ`. Do đó dù đã truyền `MAX_RUN_TOKEN` theo từng phiên, `max mcp` nối về daemon qua unix socket **vẫn giữ bước kiểm cây tiến trình qua peer credential (`SO_PEERCRED`)** làm lớp bảo vệ thứ hai để xác nhận PID gọi thật sự thuộc cây tiến trình của đúng run ứng với token đó.
 
 **Chế độ B (dự phòng): print.**
 
 ```
-agy -p --output-format stream-json --input-format stream-json
+agy --output-format stream-json --input-format stream-json -p=""
   --model <model từ `agy models`>
-  --mode accept-edits                  # agent `suggest`: plan
+  --mode accept-edits                  # agent `suggest`: plan (lưu ý: `-p` nhận chuỗi nên đặt sau `--output-format`)
   --add-dir <vùng chung>
   [--json-schema <schema>]             # chỉ lượt học
-  [--conversation <id>]
+  [--conversation=<id>]
 ```
 
 Ở chế độ B, `agy` ở mức 3 (8.4.5) và MCP của Max được khai một lần ở mức HOME riêng của Max.
 
 | Mục | Spec |
 |---|---|
-| Đăng nhập | Một lần, với HOME = `data/agent-home/agy` (không phải HOME của chủ nhân): chạy `agy` trong terminal; trên server không màn hình nó in một đường link để mở ở máy khác **[ĐÃ KIỂM docs/en/10 của Javis]** |
-| MCP | Chế độ A: khai theo từng phiên trong `session/new`, kèm token của run. Chế độ B: khai một lần ở mức HOME riêng của Max bằng `agy mcp add max -- max mcp`; Max nhận diện run theo cây tiến trình (8.4.1). Cả hai cho phép nhiều tiến trình `agy` song song, mỗi cái cho một agent |
-| Chặn tool | Tool của Max do Max kiểm ở cả hai chế độ. Tool dựng sẵn: chế độ A chặn qua `session/request_permission` (chờ S0c); chế độ B không chặn trước được |
-| System prompt | Chế độ A: nối thêm qua năng lực `systemPrompt.append` mà `agy` đã khai. Chế độ B: đưa vào đầu lượt đầu tiên của phiên |
+| Đăng nhập | Một lần bằng `agy acp --login` dưới **user hệ điều hành riêng (không có D-Bus keyring chung) hoặc trong container** với `HOME = data/agent-home/agy` (in link OAuth để mở ở máy khác và dán mã xác thực). `Health()` kiểm lỗi `-32000` (`Authentication required`) trên `session/new` chỉ đáng tin khi đã có lớp cô lập user/container này **[ĐÃ KIỂM S0c]** |
+| MCP | Chế độ A: khai theo từng phiên trong `session/new` và `session/load` (`env: [{name, value}]`), kết hợp đối chiếu cây tiến trình qua unix socket làm lớp bảo vệ thứ hai. Chế độ B: khai một lần ở mức HOME riêng của Max bằng `agy mcp add max -- max mcp`; Max nhận diện run theo cây tiến trình (8.4.1). Cả hai cho phép nhiều tiến trình `agy` song song, mỗi cái cho một agent |
+| Chặn tool | Tool của Max do Max kiểm ở cả hai chế độ. Tool dựng sẵn: chế độ A chặn 100% `run_command` qua `session/request_permission` và khóa ghi workspace cho `suggest` qua `modeId: "plan"`, còn phạm vi đọc ngoài vault dựa vào user OS/container và phạm vi ghi giữa các agent dựa vào bước kiểm `git status` sau run (8.4.5); chế độ B không chặn trước được |
+| System prompt | Chế độ A: nối thêm qua `_meta.antigravity.systemPrompt.append` **[ĐÃ KIỂM S0c]**. Chế độ B: đưa vào đầu lượt đầu tiên của phiên |
 | Model | Tên model của `agy` có thể đã mang sẵn mức suy luận; khi đó không truyền thêm `--effort` (Javis ghi nhận agy từ chối chạy nếu truyền trùng) |
-| Tự cập nhật | Tắt; Max ghim phiên bản như hai CLI kia |
+| Tự cập nhật | Tắt; Max ghim phiên bản `1.5.12` (lưu tarball kèm kiểm SHA-256 khi đóng gói image) |
 
 **S0c phải chứng minh, theo thứ tự (mỗi mục là một lượt chạy thật, có tốn hạn mức gói):**
 
@@ -716,7 +721,7 @@ Khác nhau nằm ở **tool dựng sẵn của từng CLI** (đọc/ghi file, sh
 |---|---|---|---|
 | 1 | Chặn được từng lời gọi tool dựng sẵn trước khi chạy, và tắt được shell | `claude` | Mọi vai trò |
 | 2 | Không chặn từng lời gọi, nhưng CLI tự giới hạn được việc ghi vào thư mục khai | `codex` (chờ S0b) | Vai trò chỉ cần đọc vault và ghi trong thư mục của mình + vùng chung. **Không** nhận routine `inbound`, **không** dùng profile trình duyệt `owner` |
-| 3 | Không chặn trước được | `agy` (chờ S0c) | Như mức 2, và chỉ chạy trong vùng cô lập bên dưới |
+| 3 | Không chặn trước được toàn bộ tool dựng sẵn | `agy` 1.5.12 (chế độ ACP vẫn chặn 100% shell, nhưng `read_file`/`write_file`/`search_web` không hỏi quyền **[ĐÃ KIỂM S0c]**) | Như mức 2, và chỉ chạy trong vùng cô lập bên dưới |
 
 Hai lớp bảo vệ áp dụng cho **mọi** CLI, không phụ thuộc năng lực của nó:
 
