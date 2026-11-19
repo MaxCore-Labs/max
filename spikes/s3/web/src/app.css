@@ -1,0 +1,125 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "tailwindcss";
+
+/* Token của Max. Nguồn duy nhất cho màu, chữ, bo góc, bóng.
+   Khi dựng app: chép nguyên file này vào `web/src/app.css`, đặt sau `@import "tailwindcss";`.
+   Component không được viết cứng mã màu; chỉ đọc token ở đây.
+
+   ĐỔI THƯƠNG HIỆU: màu nhấn sửa ở khối "MÀU NHẤN", font sửa ở một dòng `--app-font`. */
+
+:root {
+  color-scheme: light;
+
+  /* ===== FONT ===== */
+  --app-font: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Chỉ cho id, đường dẫn, số token, dòng lệnh. Không nạp font riêng. */
+  --app-font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Menlo", monospace;
+
+  /* ===== MÀU NHẤN ===== */
+  --primary: #181818;            /* gần đen: nút chính, thanh tiến độ, viền focus */
+  --primary-hover: #2e2e2e;
+  --primary-foreground: #ffffff; /* chữ đứng trên nền nhấn */
+
+  /* ===== NỀN VÀ CHỮ ===== */
+  --background: #f4f4f6;   /* nền trang */
+  --surface: #ffffff;      /* nền card, ô nhập, sidebar, thanh trên */
+  --surface-overlay: #ffffff; /* nền menu, popover, toast */
+  --foreground: #2c2c2c;   /* chữ chính: 13,97:1 trên surface */
+  --muted: #707070;        /* chữ phụ, nhãn, icon phụ: 4,95:1 trên surface, 4,51:1 trên background */
+
+  /* ===== VIỀN: đúng hai vai ===== */
+  --border: #f7f7f8;         /* đường tóc trang trí: viền card, đường chia, khung menu */
+  --border-strong: #eaeaea;  /* viền ô nhập, nút viền, đường kẻ khung app, đường kẻ dòng bảng */
+  --border-focus: var(--primary);
+  --ring-focus: rgba(24, 24, 24, 0.1);  /* quầng 2px quanh ô nhập đang gõ */
+
+  /* ===== VÙNG TÔ ===== */
+  --item-hover: #f4f4f6;       /* nền rê của mục thụt vào: mục menu, mục sidebar, dòng danh sách bo góc */
+  --surface-hover: #f8f8fa;    /* nền rê của dòng bảng tràn hết bề ngang khung */
+  --secondary: #e7e8ec;        /* nút phụ, mục sidebar đang chọn */
+  --secondary-hover: #dbdce2;
+  --background-hover: #e7e7ea; /* ô nhỏ nằm trong dòng có nền rê */
+  --button-hover-surface: #f1f1f3; /* nền rê nút viền khi nút nằm trên card trắng */
+  --button-hover-page: #e4e4e7;    /* nền rê nút viền khi nút nằm thẳng trên nền trang */
+  --button-hover: var(--button-hover-page);
+
+  /* ===== MÀU MANG NGHĨA: bốn tông, không thêm ===== */
+  --neutral-bg: #f4f4f5;   --neutral: #52525c;       /* chờ, đang chạy: 7,02:1 */
+  --success-bg: #ecfdf5;   --success: #007a55;       /* xong: 5,09:1 */
+  --warning-bg: #fffbeb;   --warning: #bb4d00;       /* cần chủ nhân: 4,85:1 */
+  --error-bg: #fef2f2;     --error-strong: #c10007;  /* hỏng: 5,87:1 */
+  --error: #fb2c36;                       /* viền ô nhập lỗi; không dùng cho chữ */
+  --error-ring: rgb(251 44 54 / 0.1);
+  --error-text: #e7000b;                  /* câu lỗi dưới ô: 4,77:1 trên surface */
+  --error-border: #ffc9c9;                /* viền thanh báo lỗi */
+
+  /* Nguy hiểm: lời nhắc TRƯỚC khi bấm (xoá agent, thu hồi grant). Nền mờ, không đỏ đặc. */
+  --danger: #c70036;                        /* 5,21:1 trên danger-bg */
+  --danger-bg: rgb(255 32 86 / 0.1);
+  --danger-bg-hover: rgb(255 32 86 / 0.15);
+
+  /* ===== BO GÓC: bốn bậc ===== */
+  --radius-full: 9999px;  /* badge, chip, avatar */
+  --radius-lg: 1rem;      /* 16px: card, hộp thoại, khung menu */
+  --radius: 0.75rem;      /* 12px: nút, ô nhập, mục menu, mọi control cao từ 40px */
+  --radius-sm: 0.5rem;    /* 8px: nút 32px trong bảng dày, chip công cụ */
+
+  /* ===== BÓNG: chỉ cho lớp nổi ===== */
+  --elevation-popover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --elevation-modal: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* ===== KÍCH THƯỚC CONTROL ===== */
+  --control-h: 2.5rem;        /* 40px: nút, ô nhập, mục sidebar, mục menu */
+  --control-h-touch: 2.75rem; /* 44px: nút và ô nhập ở màn dưới 768px */
+  --control-h-dense: 2rem;    /* 32px: nút trong dòng bảng dày */
+  --row-h-dense: 2.5rem;      /* 40px: dòng bảng dày, cố định để ảo hóa */
+}
+
+/* ===== MAP TOKEN SANG CLASS TAILWIND 4 =====
+   Thiếu khối này thì `bg-surface`, `text-muted`, `border-border-strong`... không sinh ra. */
+@theme inline {
+  --font-sans: var(--app-font);
+  --font-mono: var(--app-font-mono);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-background: var(--background);
+  --color-background-hover: var(--background-hover);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-item-hover: var(--item-hover);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-button-hover: var(--button-hover);
+
+  --color-neutral: var(--neutral);          --color-neutral-bg: var(--neutral-bg);
+  --color-success: var(--success);          --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);          --color-warning-bg: var(--warning-bg);
+  --color-error-strong: var(--error-strong); --color-error-bg: var(--error-bg);
+  --color-error: var(--error);              --color-error-text: var(--error-text);
+  --color-danger: var(--danger);            --color-danger-bg: var(--danger-bg);
+
+  --border-color-focus: var(--border-focus);
+  --ring-color-focus: var(--ring-focus);
+  --shadow-popover: var(--elevation-popover);
+  --shadow-modal: var(--elevation-modal);
+}
+
+/* Nền rê của nút viền đổi theo nền ngay sau nút. */
+.bg-surface *,
+.bg-surface-overlay * { --button-hover: var(--button-hover-surface); }
+.bg-surface .bg-background * { --button-hover: var(--button-hover-page); }
+
+body {
+  font-family: var(--app-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

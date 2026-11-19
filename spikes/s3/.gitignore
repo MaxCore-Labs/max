@@ -1,0 +1,6 @@
+/s3
+*.exe
+web/node_modules/
+web/.svelte-kit/
+web/build/
+tmp/
