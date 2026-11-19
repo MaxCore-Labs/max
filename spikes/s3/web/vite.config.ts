@@ -10,8 +10,8 @@ export default defineConfig({
 			adapter: adapter({
 				pages: 'build',
 				assets: 'build',
-				fallback: 'index.html',
-				precompress: false,
+				fallback: '200.html',
+				precompress: true,
 				strict: true
 			})
 		})

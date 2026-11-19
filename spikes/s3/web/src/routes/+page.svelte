@@ -2,7 +2,12 @@
 	import { liveEvents } from '#lib/events.svelte.js';
 </script>
 
-<section class="rounded-[var(--radius-lg)] border border-border bg-surface p-4 sm:p-5">
+<section
+	data-testid="sse-panel"
+	data-boot-id={liveEvents.bootId ?? ''}
+	data-reconnect-count={liveEvents.reconnectCount}
+	class="rounded-[var(--radius-lg)] border border-border bg-surface p-4 sm:p-5"
+>
 	<div class="flex items-center justify-between border-b border-border pb-3">
 		<div>
 			<h1 class="text-base font-semibold">Luồng sự kiện thời gian thực (`/api/v1/events`)</h1>
@@ -52,7 +57,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each liveEvents.history as item (item.seq)}
+					{#each liveEvents.history as item (item.id)}
 						<tr class="h-10 border-b border-border-strong last:border-b-0 hover:bg-surface-hover">
 							<td class="px-3 font-mono tabular-nums">#{item.seq}</td>
 							<td class="px-3 font-mono tabular-nums text-muted">{item.serverSentMs}</td>

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -22,22 +23,107 @@ import (
 var embeddedWeb embed.FS
 
 type tickPayload struct {
+	BootID       string `json:"bootId"`
 	Seq          int64  `json:"seq"`
 	ServerSentMs int64  `json:"serverSentMs"`
 	Topic        string `json:"topic"`
 }
 
-func newHandler() (http.Handler, error) {
+func acceptsEncoding(header, target string) bool {
+	for part := range strings.SplitSeq(header, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		name, params, hasParams := strings.Cut(part, ";")
+		if !strings.EqualFold(strings.TrimSpace(name), target) {
+			continue
+		}
+		if hasParams {
+			for p := range strings.SplitSeq(params, ";") {
+				k, v, ok := strings.Cut(strings.TrimSpace(p), "=")
+				if ok && strings.EqualFold(strings.TrimSpace(k), "q") {
+					q := strings.TrimSpace(v)
+					if q == "0" || q == "0.0" || q == "0.00" || q == "0.000" {
+						return false
+					}
+				}
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func contentTypeByPath(cleanPath string) string {
+	ext := strings.ToLower(path.Ext(cleanPath))
+	switch ext {
+	case ".js", ".mjs":
+		return "text/javascript; charset=utf-8"
+	case ".css":
+		return "text/css; charset=utf-8"
+	case ".json", ".map":
+		return "application/json; charset=utf-8"
+	case ".svg":
+		return "image/svg+xml"
+	case ".woff2":
+		return "font/woff2"
+	case ".woff":
+		return "font/woff"
+	case ".html":
+		return "text/html; charset=utf-8"
+	default:
+		if ct := mime.TypeByExtension(ext); ct != "" {
+			return ct
+		}
+		return "application/octet-stream"
+	}
+}
+
+func serveStaticFile(w http.ResponseWriter, r *http.Request, distFS fs.FS, clean string, modTime time.Time) bool {
+	w.Header().Set("Vary", "Accept-Encoding")
+	ct := contentTypeByPath(clean)
+	ae := r.Header.Get("Accept-Encoding")
+
+	if acceptsEncoding(ae, "br") {
+		if b, err := fs.ReadFile(distFS, clean+".br"); err == nil {
+			w.Header().Set("Content-Encoding", "br")
+			w.Header().Set("Content-Type", ct)
+			http.ServeContent(w, r, path.Base(clean), modTime, bytes.NewReader(b))
+			return true
+		}
+	}
+	if acceptsEncoding(ae, "gzip") {
+		if b, err := fs.ReadFile(distFS, clean+".gz"); err == nil {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Content-Type", ct)
+			http.ServeContent(w, r, path.Base(clean), modTime, bytes.NewReader(b))
+			return true
+		}
+	}
+	b, err := fs.ReadFile(distFS, clean)
+	if err != nil {
+		return false
+	}
+	w.Header().Set("Content-Type", ct)
+	http.ServeContent(w, r, path.Base(clean), modTime, bytes.NewReader(b))
+	return true
+}
+
+func newHandlerWithTimings(tickInterval, pingInterval time.Duration) (http.Handler, fs.FS, error) {
 	distFS, err := fs.Sub(embeddedWeb, "web/build")
 	if err != nil {
-		return nil, fmt.Errorf("sub web/build: %w", err)
+		return nil, nil, fmt.Errorf("sub web/build: %w", err)
 	}
-	indexHTML, err := fs.ReadFile(distFS, "index.html")
+	spaHTML, err := fs.ReadFile(distFS, "200.html")
 	if err != nil {
-		return nil, fmt.Errorf("read embedded index.html: %w", err)
+		spaHTML, err = fs.ReadFile(distFS, "index.html")
+		if err != nil {
+			return nil, nil, fmt.Errorf("read embedded SPA fallback (200.html/index.html): %w", err)
+		}
 	}
-	fileServer := http.FileServer(http.FS(distFS))
 
+	bootID := fmt.Sprintf("b%x", time.Now().UnixNano())
 	mux := http.NewServeMux()
 	var globalSeq atomic.Int64
 
@@ -59,6 +145,7 @@ func newHandler() (http.Handler, error) {
 
 		sendTick := func() error {
 			p := tickPayload{
+				BootID:       bootID,
 				Seq:          globalSeq.Add(1),
 				ServerSentMs: time.Now().UnixMilli(),
 				Topic:        topic,
@@ -78,16 +165,24 @@ func newHandler() (http.Handler, error) {
 			return
 		}
 
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
+		tickTicker := time.NewTicker(tickInterval)
+		defer tickTicker.Stop()
+		pingTicker := time.NewTicker(pingInterval)
+		defer pingTicker.Stop()
+
 		for {
 			select {
 			case <-r.Context().Done():
 				return
-			case <-ticker.C:
+			case <-tickTicker.C:
 				if err := sendTick(); err != nil {
 					return
 				}
+			case <-pingTicker.C:
+				if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+					return
+				}
+				flusher.Flush()
 			}
 		}
 	})
@@ -101,9 +196,25 @@ func newHandler() (http.Handler, error) {
 		}
 
 		clean := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-		if clean != "" {
+		if strings.HasSuffix(clean, ".br") || strings.HasSuffix(clean, ".gz") {
+			http.NotFound(w, r)
+			return
+		}
+
+		if clean != "" && clean != "200.html" && clean != "index.html" {
 			if info, err := fs.Stat(distFS, clean); err == nil && !info.IsDir() {
-				fileServer.ServeHTTP(w, r)
+				if strings.HasPrefix(clean, "_app/immutable/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "public, max-age=3600")
+				}
+				if serveStaticFile(w, r, distFS, clean, info.ModTime()) {
+					return
+				}
+			}
+			// Missing hashed chunks or static files with extensions must return 404, never SPA HTML.
+			if strings.HasPrefix(clean, "_app/") || path.Ext(clean) != "" {
+				http.NotFound(w, r)
 				return
 			}
 		}
@@ -111,83 +222,27 @@ func newHandler() (http.Handler, error) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(indexHTML)
+		_, _ = w.Write(spaHTML)
 	})
 
-	return mux, nil
-}
-
-func runSelfTest(baseURL string) error {
-	// 1. Direct reload of /activity must return 200 SPA index.html
-	resp, err := http.Get(baseURL + "/activity")
-	if err != nil {
-		return fmt.Errorf("GET /activity: %w", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "_app/immutable") {
-		return fmt.Errorf("unexpected /activity response: status=%d len=%d", resp.StatusCode, len(body))
-	}
-	fmt.Printf("  [SelfTest] GET /activity -> HTTP %d (%d bytes SPA shell)\n", resp.StatusCode, len(body))
-
-	// 2. Unknown /api/ route must NOT return HTML fallback
-	apiResp, err := http.Get(baseURL + "/api/v1/nonexistent")
-	if err != nil {
-		return err
-	}
-	_ = apiResp.Body.Close()
-	if apiResp.StatusCode != http.StatusNotFound {
-		return fmt.Errorf("expected 404 on unknown /api route, got %d", apiResp.StatusCode)
-	}
-	fmt.Printf("  [SelfTest] GET /api/v1/nonexistent -> HTTP %d (no HTML leak)\n", apiResp.StatusCode)
-
-	// 3. Measure SSE delivery latency across 2 ticks
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/v1/events?topics=status", nil)
-	if err != nil {
-		return err
-	}
-	sseResp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("connect SSE: %w", err)
-	}
-	defer func() { _ = sseResp.Body.Close() }()
-
-	sc := bufio.NewScanner(sseResp.Body)
-	ticks := 0
-	for sc.Scan() {
-		line := sc.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		recvMs := time.Now().UnixMilli()
-		var p tickPayload
-		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &p); err != nil {
-			return err
-		}
-		lat := recvMs - p.ServerSentMs
-		fmt.Printf("  [SelfTest] SSE tick #%d received in %d ms\n", p.Seq, lat)
-		if lat >= 200 {
-			return fmt.Errorf("SSE latency %d ms >= 200 ms", lat)
-		}
-		ticks++
-		if ticks >= 2 {
-			break
-		}
-	}
-	if ticks < 2 {
-		return fmt.Errorf("expected 2 SSE ticks, got %d", ticks)
-	}
-	return nil
+	return mux, distFS, nil
 }
 
 func main() {
 	listenAddr := flag.String("listen", "127.0.0.1:18787", "address to listen on")
-	selfTest := flag.Bool("self-test", false, "run automated SPA fallback and SSE latency check then exit")
+	tickMs := flag.Int("tick-ms", 1000, "SSE tick interval in milliseconds")
+	pingMs := flag.Int("ping-ms", 15000, "SSE keepalive ': ping' interval in milliseconds")
+	selfTest := flag.Bool("self-test", false, "run automated SPA fallback, cache-header, and SSE check then exit")
 	flag.Parse()
 
-	handler, err := newHandler()
+	pMs := *pingMs
+	if *selfTest && pMs > 300 {
+		pMs = 300
+	}
+	handler, distFS, err := newHandlerWithTimings(
+		time.Duration(*tickMs)*time.Millisecond,
+		time.Duration(pMs)*time.Millisecond,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init handler: %v\n", err)
 		os.Exit(1)
@@ -211,7 +266,7 @@ func main() {
 	if *selfTest {
 		go func() { _ = srv.Serve(ln) }()
 		baseURL := "http://" + ln.Addr().String()
-		if err := runSelfTest(baseURL); err != nil {
+		if err := runSelfTest(baseURL, distFS); err != nil {
 			fmt.Fprintf(os.Stderr, "FAIL: %v\n", err)
 			os.Exit(1)
 		}

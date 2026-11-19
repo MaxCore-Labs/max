@@ -4,6 +4,7 @@
 	let dialogEl: HTMLDialogElement | undefined = $state();
 	let triggerBtnEl: HTMLButtonElement | undefined = $state();
 	let popoverEl: HTMLDivElement | undefined = $state();
+	let popoverOpen = $state(false);
 	let lastAction = $state('Chưa chọn thao tác');
 
 	function openModal(): void {
@@ -21,16 +22,72 @@
 	}
 
 	// Position native [popover] relative to trigger button via getBoundingClientRect()
-	// so anchored placement works identically on Chrome, Firefox, and Safari without CSS Anchor Positioning.
+	// with full viewport clamping (horizontal + vertical flip) so anchored placement
+	// works consistently without relying on CSS Anchor Positioning.
+	function positionPopover(): void {
+		if (!triggerBtnEl || !popoverEl) {
+			return;
+		}
+		const margin = 8;
+		const gap = 6;
+		const rect = triggerBtnEl.getBoundingClientRect();
+		const popRect = popoverEl.getBoundingClientRect();
+		const popW = Math.ceil(popRect.width) || 216;
+		const popH = Math.ceil(popRect.height) || 140;
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+
+		const maxLeft = Math.max(margin, vw - popW - margin);
+		const left = Math.min(Math.max(margin, Math.round(rect.left)), maxLeft);
+
+		const maxTop = Math.max(margin, vh - popH - margin);
+		let top = Math.round(rect.bottom + gap);
+		if (top > maxTop) {
+			const flippedTop = Math.round(rect.top - gap - popH);
+			top = flippedTop >= margin ? Math.min(flippedTop, maxTop) : maxTop;
+		}
+
+		popoverEl.style.inset = 'auto';
+		popoverEl.style.position = 'fixed';
+		popoverEl.style.margin = '0';
+		popoverEl.style.left = `${left}px`;
+		popoverEl.style.top = `${top}px`;
+	}
+
 	function handlePopoverToggle(ev: ToggleEvent): void {
-		if (ev.newState === 'open' && triggerBtnEl && popoverEl) {
-			const rect = triggerBtnEl.getBoundingClientRect();
-			popoverEl.style.position = 'fixed';
-			popoverEl.style.margin = '0';
-			popoverEl.style.top = `${Math.round(rect.bottom + 6)}px`;
-			popoverEl.style.left = `${Math.max(8, Math.round(rect.left))}px`;
+		const isOpen = ev.newState === 'open';
+		popoverOpen = isOpen;
+		if (isOpen) {
+			positionPopover();
+			requestAnimationFrame(positionPopover);
 		}
 	}
+
+	$effect(() => {
+		if (!popoverOpen) {
+			return;
+		}
+		const onResize = (): void => {
+			positionPopover();
+		};
+		const onScroll = (): void => {
+			if (!triggerBtnEl || !popoverEl) {
+				return;
+			}
+			const rect = triggerBtnEl.getBoundingClientRect();
+			if (rect.bottom < 0 || rect.top > window.innerHeight) {
+				popoverEl.hidePopover();
+				return;
+			}
+			positionPopover();
+		};
+		window.addEventListener('resize', onResize);
+		window.addEventListener('scroll', onScroll, true);
+		return () => {
+			window.removeEventListener('resize', onResize);
+			window.removeEventListener('scroll', onScroll, true);
+		};
+	});
 
 	function pickMenuItem(label: string): void {
 		lastAction = label;
