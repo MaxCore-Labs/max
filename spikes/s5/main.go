@@ -1,3 +1,9 @@
+// Package main runs the S5 subscription quota & throughput probe against `agy acp`.
+//
+// IMPORTANT ISOLATION REQUIREMENT (from S0c): On Linux, `agy` reads OAuth credentials
+// from the OS user keyring (scoped by UID via D-Bus), NOT from `HOME` alone. Always run
+// this probe inside an isolated container or dedicated OS user for Max so personal
+// account quota is not consumed accidentally.
 package main
 
 import (
@@ -14,14 +20,19 @@ import (
 )
 
 type runMeasurement struct {
-	Phase       string       `json:"phase"`
-	Worker      int          `json:"worker"`
-	Iteration   int          `json:"iteration"`
-	DurationMs  int64        `json:"durationMs"`
-	Usage       usageMetrics `json:"usage"`
-	SummaryByte int          `json:"summaryBytes"`
-	LimitHit    bool         `json:"limitHit,omitempty"`
-	ErrorText   string       `json:"errorText,omitempty"`
+	Phase           string            `json:"phase"`
+	Worker          int               `json:"worker"`
+	Iteration       int               `json:"iteration"`
+	DurationMs      int64             `json:"durationMs"`
+	StopReason      string            `json:"stopReason,omitempty"`
+	Usage           usageMetrics      `json:"usage"`
+	NonCachedTokens int64             `json:"nonCachedTokens"`
+	SummaryByte     int               `json:"summaryBytes"`
+	SummaryWords    int               `json:"summaryWords"`
+	LimitHit        bool              `json:"limitHit,omitempty"`
+	ErrorText       string            `json:"errorText,omitempty"`
+	StderrText      string            `json:"stderrText,omitempty"`
+	Notifications   []json.RawMessage `json:"notifications,omitempty"`
 }
 
 func findAgyBinary() (string, error) {
@@ -31,9 +42,17 @@ func findAgyBinary() (string, error) {
 	if p, err := exec.LookPath("agy"); err == nil {
 		return p, nil
 	}
-	local := filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Local", "agy", "bin", "agy.EXE")
-	if _, err := os.Stat(local); err == nil {
-		return local, nil
+	if home := os.Getenv("HOME"); home != "" {
+		linuxLocal := filepath.Join(home, ".local", "bin", "agy")
+		if _, err := os.Stat(linuxLocal); err == nil {
+			return linuxLocal, nil
+		}
+	}
+	if up := os.Getenv("USERPROFILE"); up != "" {
+		winLocal := filepath.Join(up, "AppData", "Local", "agy", "bin", "agy.EXE")
+		if _, err := os.Stat(winLocal); err == nil {
+			return winLocal, nil
+		}
 	}
 	return "", fmt.Errorf("agy binary not found")
 }
@@ -66,19 +85,36 @@ Lớp thứ ba là quét bí mật bằng bộ lọc redact trước khi bất k
 	return nil
 }
 
-func isQuotaLimitError(err error) bool {
-	if err == nil {
-		return false
+// isQuotaLimitSignal checks structured phrases across RPC errors, stderr, and stopReason
+// without matching bare "429" substrings inside token counts or session IDs.
+func isQuotaLimitSignal(errText, stderrText, stopReason string) bool {
+	combined := strings.ToLower(errText + "\n" + stderrText + "\n" + stopReason)
+	patterns := []string{
+		"resource_exhausted",
+		"quota exceeded",
+		"quota_exceeded",
+		"quota limit",
+		"out of quota",
+		"rate limit",
+		"rate_limit",
+		"too many requests",
+		"http 429",
+		"status 429",
+		"status: 429",
+		"code 429",
+		"code: 429",
+		"limit reached",
+		"usage limit",
 	}
-	s := strings.ToLower(err.Error())
-	return strings.Contains(s, "quota") ||
-		strings.Contains(s, "rate limit") ||
-		strings.Contains(s, "resource_exhausted") ||
-		strings.Contains(s, "429") ||
-		strings.Contains(s, "limit reached")
+	for _, p := range patterns {
+		if strings.Contains(combined, p) {
+			return true
+		}
+	}
+	return false
 }
 
-// executeSampleTask runs one fixed benchmark unit: read 3 files, write ~300-word summary.md.
+// executeSampleTask runs one fixed benchmark unit: read 3 files, write ~250-300 word summary.md.
 func executeSampleTask(ctx context.Context, agyBin, homeDir, workDir, phase string, worker, iter int) runMeasurement {
 	t0 := time.Now()
 	m := runMeasurement{Phase: phase, Worker: worker, Iteration: iter}
@@ -95,7 +131,12 @@ func executeSampleTask(ctx context.Context, agyBin, homeDir, workDir, phase stri
 		m.ErrorText = err.Error()
 		return m
 	}
-	defer r.close()
+	defer func() {
+		r.close()
+		m.StderrText = r.stderrString()
+		m.Notifications = r.recordedEvents()
+		m.LimitHit = m.LimitHit || isQuotaLimitSignal(m.ErrorText, m.StderrText, m.StopReason)
+	}()
 
 	if _, err := r.call(ctx, "initialize", map[string]any{
 		"protocolVersion":    1,
@@ -103,7 +144,6 @@ func executeSampleTask(ctx context.Context, agyBin, homeDir, workDir, phase stri
 		"clientInfo":         map[string]any{"name": "max-s5", "version": "0.1.0"},
 	}); err != nil {
 		m.DurationMs = time.Since(t0).Milliseconds()
-		m.LimitHit = isQuotaLimitError(err)
 		m.ErrorText = err.Error()
 		return m
 	}
@@ -114,14 +154,17 @@ func executeSampleTask(ctx context.Context, agyBin, homeDir, workDir, phase stri
 	})
 	if err != nil {
 		m.DurationMs = time.Since(t0).Milliseconds()
-		m.LimitHit = isQuotaLimitError(err)
 		m.ErrorText = err.Error()
 		return m
 	}
 	var sr struct {
 		SessionID string `json:"sessionId"`
 	}
-	_ = json.Unmarshal(newRes, &sr)
+	if err := json.Unmarshal(newRes, &sr); err != nil || sr.SessionID == "" {
+		m.DurationMs = time.Since(t0).Milliseconds()
+		m.ErrorText = fmt.Sprintf("session/new: missing sessionId (err=%v)", err)
+		return m
+	}
 
 	prompt := fmt.Sprintf(
 		"Trong thư mục %s: hãy đọc cả 3 file doc1_actor.md, doc2_quota.md, doc3_security.md rồi viết một bản tổng hợp khoảng 250–300 từ tiếng Việt vào file summary.md, sau đó trả lời ngắn 'XONG'.",
@@ -133,16 +176,32 @@ func executeSampleTask(ctx context.Context, agyBin, homeDir, workDir, phase stri
 	})
 	m.DurationMs = time.Since(t0).Milliseconds()
 	if err != nil {
-		m.LimitHit = isQuotaLimitError(err)
 		m.ErrorText = err.Error()
 		return m
 	}
 
 	var pr promptResponse
-	_ = json.Unmarshal(pRes, &pr)
+	if err := json.Unmarshal(pRes, &pr); err != nil {
+		m.ErrorText = "decode session/prompt result: " + err.Error()
+		return m
+	}
+	m.StopReason = pr.StopReason
 	m.Usage = pr.Usage
-	if st, statErr := os.Stat(summaryPath); statErr == nil {
-		m.SummaryByte = int(st.Size())
+	m.NonCachedTokens = pr.Usage.InputTokens + pr.Usage.OutputTokens
+	if pr.StopReason != "end_turn" || pr.Usage.TotalTokens == 0 {
+		m.ErrorText = fmt.Sprintf("unexpected stopReason=%q totalTokens=%d", pr.StopReason, pr.Usage.TotalTokens)
+		return m
+	}
+
+	summaryData, readErr := os.ReadFile(summaryPath)
+	if readErr != nil {
+		m.ErrorText = fmt.Sprintf("missing summary.md: %v", readErr)
+		return m
+	}
+	m.SummaryByte = len(summaryData)
+	m.SummaryWords = len(strings.Fields(string(summaryData)))
+	if m.SummaryWords < 150 || m.SummaryWords > 450 {
+		m.ErrorText = fmt.Sprintf("summary.md word count %d outside [150, 450]", m.SummaryWords)
 	}
 	return m
 }
@@ -158,7 +217,7 @@ func appendMeasurementLog(logPath string, m runMeasurement) {
 }
 
 func main() {
-	homeFlag := flag.String("home", "", "isolated agy agent-home directory")
+	homeFlag := flag.String("home", "", "isolated agy agent-home directory (shared across workers)")
 	seqRuns := flag.Int("seq-runs", 4, "max sequential runs in Step 1-2 (0 = unlimited until max-duration or quota limit)")
 	seqMaxDur := flag.Duration("seq-duration", 4*time.Hour, "max duration for sequential phase (Step 2)")
 	parWorkers := flag.Int("par-workers", 3, "parallel agy processes in Step 3")
@@ -181,73 +240,78 @@ func main() {
 		os.Exit(1)
 	}
 
+	tmpRoot, err := os.MkdirTemp("", "max-s5-*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mktemp: %v\n", err)
+		os.Exit(1)
+	}
+	defer func() { _ = os.RemoveAll(tmpRoot) }()
+
 	logPath := filepath.Join(baseDir, "measurements.ndjson")
 	_ = os.Remove(logPath)
-	defer func() { _ = os.RemoveAll(filepath.Join(baseDir, "tmp")) }()
 
-	// Phase A (Steps 1–2): 1 process sequential
 	fmt.Printf("=== [Steps 1–2] Single-Process Baseline (maxRuns=%d, maxDur=%s) ===\n", *seqRuns, *seqMaxDur)
 	seqCtx, cancelSeq := context.WithTimeout(context.Background(), *seqMaxDur)
 	tSeqStart := time.Now()
-	var seqTotalTokens int64
+	var seqInOutTokens, seqTotalTokens int64
 	seqCompleted := 0
 
 	for i := 1; *seqRuns == 0 || i <= *seqRuns; i++ {
 		if seqCtx.Err() != nil {
 			break
 		}
-		workDir := filepath.Join(baseDir, "tmp", fmt.Sprintf("seq-%d", i))
+		workDir := filepath.Join(tmpRoot, fmt.Sprintf("seq-%d", i))
 		m := executeSampleTask(seqCtx, agyBin, homeDir, workDir, "sequential-1x", 1, i)
 		appendMeasurementLog(logPath, m)
-		fmt.Printf("  [1x #%d] dur=%.2fs | in=%d out=%d cached=%d thought=%d total=%d | summary=%dB | err=%s\n",
+		fmt.Printf("  [1x #%d] dur=%.2fs | in+out=%d cached=%d thought=%d total=%d | words=%d (%dB) | err=%s\n",
 			i, float64(m.DurationMs)/1000.0,
-			m.Usage.InputTokens, m.Usage.OutputTokens, m.Usage.CachedReadTokens, m.Usage.ThoughtTokens, m.Usage.TotalTokens,
-			m.SummaryByte, m.ErrorText)
+			m.NonCachedTokens, m.Usage.CachedReadTokens, m.Usage.ThoughtTokens, m.Usage.TotalTokens,
+			m.SummaryWords, m.SummaryByte, m.ErrorText)
 		if m.LimitHit || m.ErrorText != "" {
 			break
 		}
 		seqCompleted++
+		seqInOutTokens += m.NonCachedTokens
 		seqTotalTokens += m.Usage.TotalTokens
 	}
 	seqWallSec := time.Since(tSeqStart).Seconds()
 	cancelSeq()
 
+	seqInOutPerMin := float64(seqInOutTokens) / max(seqWallSec/60.0, 0.001)
 	seqTokPerMin := float64(seqTotalTokens) / max(seqWallSec/60.0, 0.001)
-	seqRunsPerMin := float64(seqCompleted) / max(seqWallSec/60.0, 0.001)
-	fmt.Printf("  [1x Summary] runs=%d | wall=%.1fs | totalTokens=%d | rate=%.0f tok/min (%.2f runs/min)\n",
-		seqCompleted, seqWallSec, seqTotalTokens, seqTokPerMin, seqRunsPerMin)
+	fmt.Printf("  [1x Summary] runs=%d | wall=%.1fs | in+out=%d (%.0f/min) | total=%d (%.0f/min)\n",
+		seqCompleted, seqWallSec, seqInOutTokens, seqInOutPerMin, seqTotalTokens, seqTokPerMin)
 
-	// Phase B (Step 3): 3 processes in parallel
-	fmt.Printf("\n=== [Step 3] %d Parallel Processes Linearity Check (rounds=%d, maxDur=%s) ===\n",
+	fmt.Printf("\n=== [Step 3] %d Parallel Processes Throughput Check (rounds=%d, maxDur=%s) ===\n",
 		*parWorkers, *parRounds, *parMaxDur)
 	parCtx, cancelPar := context.WithTimeout(context.Background(), *parMaxDur)
 	tParStart := time.Now()
 
 	var mu sync.Mutex
-	var parTotalTokens int64
+	var parInOutTokens, parTotalTokens int64
 	parCompleted := 0
 	var wg sync.WaitGroup
 
 	for w := 1; w <= *parWorkers; w++ {
-		w := w
 		wg.Add(1)
-		go func() {
+		go func(workerID int) {
 			defer wg.Done()
 			for r := 1; *parRounds == 0 || r <= *parRounds; r++ {
 				if parCtx.Err() != nil {
 					return
 				}
-				workDir := filepath.Join(baseDir, "tmp", fmt.Sprintf("par-w%d-r%d", w, r))
-				m := executeSampleTask(parCtx, agyBin, homeDir, workDir, "parallel-3x", w, r)
+				workDir := filepath.Join(tmpRoot, fmt.Sprintf("par-w%d-r%d", workerID, r))
+				m := executeSampleTask(parCtx, agyBin, homeDir, workDir, "parallel-3x", workerID, r)
 				appendMeasurementLog(logPath, m)
 
 				mu.Lock()
-				fmt.Printf("  [3x W%d #%d] dur=%.2fs | in=%d out=%d cached=%d thought=%d total=%d | summary=%dB | err=%s\n",
-					w, r, float64(m.DurationMs)/1000.0,
-					m.Usage.InputTokens, m.Usage.OutputTokens, m.Usage.CachedReadTokens, m.Usage.ThoughtTokens, m.Usage.TotalTokens,
-					m.SummaryByte, m.ErrorText)
+				fmt.Printf("  [3x W%d #%d] dur=%.2fs | in+out=%d cached=%d thought=%d total=%d | words=%d (%dB) | err=%s\n",
+					workerID, r, float64(m.DurationMs)/1000.0,
+					m.NonCachedTokens, m.Usage.CachedReadTokens, m.Usage.ThoughtTokens, m.Usage.TotalTokens,
+					m.SummaryWords, m.SummaryByte, m.ErrorText)
 				if m.ErrorText == "" {
 					parCompleted++
+					parInOutTokens += m.NonCachedTokens
 					parTotalTokens += m.Usage.TotalTokens
 				}
 				mu.Unlock()
@@ -255,15 +319,15 @@ func main() {
 					return
 				}
 			}
-		}()
+		}(w)
 	}
 	wg.Wait()
 	parWallSec := time.Since(tParStart).Seconds()
 	cancelPar()
 
+	parInOutPerMin := float64(parInOutTokens) / max(parWallSec/60.0, 0.001)
 	parTokPerMin := float64(parTotalTokens) / max(parWallSec/60.0, 0.001)
-	parRunsPerMin := float64(parCompleted) / max(parWallSec/60.0, 0.001)
 	speedup := parTokPerMin / max(seqTokPerMin, 1.0)
-	fmt.Printf("  [3x Summary] runs=%d | wall=%.1fs | totalTokens=%d | rate=%.0f tok/min (%.2f runs/min) | Scaling vs 1x = %.2fx\n",
-		parCompleted, parWallSec, parTotalTokens, parTokPerMin, parRunsPerMin, speedup)
+	fmt.Printf("  [3x Summary] runs=%d | wall=%.1fs | in+out=%d (%.0f/min) | total=%d (%.0f/min) | WallSpeedup=%.2fx\n",
+		parCompleted, parWallSec, parInOutTokens, parInOutPerMin, parTotalTokens, parTokPerMin, speedup)
 }
