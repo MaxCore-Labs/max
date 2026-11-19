@@ -14,11 +14,21 @@ import (
 )
 
 //go:embed schema.sql
-var schemaSQL string
+var schemaOptimizedSQL string
+
+//go:embed schema_baseline.sql
+var schemaBaselineSQL string
+
+const maxWakeupAttempts = 3
 
 type store struct {
-	writeDB *sql.DB
-	readDB  *sql.DB
+	writeDB, readDB                                           *sql.DB
+	stmtCandJoin, stmtCandIdx, stmtScanMailbox                *sql.Stmt
+	stmtClaimOne, stmtClaimBatch20, stmtRecomputeSel          *sql.Stmt
+	stmtAgentReadyOn, stmtAgentReadyOff, stmtAgentClaimUpdate *sql.Stmt
+	stmtInsertRun, stmtTeamAddDelta                           *sql.Stmt
+	stmtFinishRun, stmtFinishWakeups, stmtFinishAgent         *sql.Stmt
+	stmtTeamDec                                               *sql.Stmt
 }
 
 type claimedRun struct {
@@ -38,11 +48,44 @@ func newID() string {
 	return id.String()
 }
 
-func openStore(ctx context.Context, dbPath string) (*store, error) {
-	slash := filepath.ToSlash(dbPath)
-	basePragmas := "_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=cache_size(-131072)&_pragma=mmap_size(536870912)&_pragma=wal_autocheckpoint(4000)"
-	writeDSN := fmt.Sprintf("file:%s?%s&_txlock=immediate", slash, basePragmas)
-	readDSN := fmt.Sprintf("file:%s?%s", slash, basePragmas)
+// escapeSQLiteURIPath escapes special URI characters (%, ?, #, space) per https://www.sqlite.org/uri.html.
+func escapeSQLiteURIPath(dbPath string) string {
+	return strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23", " ", "%20").Replace(filepath.ToSlash(dbPath))
+}
+
+const (
+	// Writer (1 conn): 128 MiB page cache, 512 MiB mmap, 64 MiB autocheckpoint ceiling + explicit PASSIVE checkpoints.
+	writePragmas = "_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=cache_size(-131072)&_pragma=mmap_size(536870912)&_pragma=wal_autocheckpoint(16000)&_txlock=immediate"
+	// Readers (8 conns): 4 MiB page cache each (32 MiB total ceiling) + shared OS page cache via 512 MiB mmap.
+	// Total private SQLite page-cache ceiling across all 9 connections = 128 + 8*4 = 160 MiB.
+	readPragmas = "_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=cache_size(-4096)&_pragma=mmap_size(536870912)&_pragma=query_only(1)"
+)
+
+const candidateSQLJoin = `
+SELECT a.id, a.team_id, t.running, t.max_running
+FROM agents a JOIN teams t ON t.id = a.team_id
+WHERE a.ready = 1 AND a.active_run_id IS NULL AND a.status = 'active'
+  AND (a.cooldown_until <= ? OR a.ready_priority >= 100)
+  AND t.running < t.max_running
+  AND (a.engine_mask & ?) != 0
+ORDER BY a.ready_priority DESC, a.ready_since
+LIMIT ?`
+
+const candidateSQLIndexed = `
+SELECT a.id, a.team_id, t.running, t.max_running
+FROM agents a INDEXED BY agents_ready
+JOIN teams t ON t.id = a.team_id
+WHERE a.ready = 1 AND a.active_run_id IS NULL AND a.status = 'active'
+  AND (a.cooldown_until <= ? OR a.ready_priority >= 100)
+  AND t.running < t.max_running
+  AND (a.engine_mask & ?) != 0
+ORDER BY a.ready_priority DESC, a.ready_since
+LIMIT ?`
+
+func openStore(ctx context.Context, dbPath string, schemaVariant string) (*store, error) {
+	escaped := escapeSQLiteURIPath(dbPath)
+	writeDSN := fmt.Sprintf("file:%s?%s", escaped, writePragmas)
+	readDSN := fmt.Sprintf("file:%s?%s", escaped, readPragmas)
 
 	wdb, err := sql.Open("sqlite", writeDSN)
 	if err != nil {
@@ -51,9 +94,13 @@ func openStore(ctx context.Context, dbPath string) (*store, error) {
 	wdb.SetMaxOpenConns(1)
 	wdb.SetMaxIdleConns(1)
 
-	if _, err := wdb.ExecContext(ctx, schemaSQL); err != nil && !strings.Contains(err.Error(), "already exists") {
+	ddl := schemaOptimizedSQL
+	if schemaVariant == "baseline" {
+		ddl = schemaBaselineSQL
+	}
+	if _, err := wdb.ExecContext(ctx, ddl); err != nil && !strings.Contains(err.Error(), "already exists") {
 		_ = wdb.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+		return nil, fmt.Errorf("apply schema (%s): %w", schemaVariant, err)
 	}
 
 	rdb, err := sql.Open("sqlite", readDSN)
@@ -64,191 +111,260 @@ func openStore(ctx context.Context, dbPath string) (*store, error) {
 	rdb.SetMaxOpenConns(8)
 	rdb.SetMaxIdleConns(8)
 
-	return &store{writeDB: wdb, readDB: rdb}, nil
+	st := &store{writeDB: wdb, readDB: rdb}
+	if err := st.prepareStatements(ctx, schemaVariant); err != nil {
+		_ = st.close()
+		return nil, err
+	}
+	return st, nil
+}
+
+func (s *store) prepareStatements(ctx context.Context, schemaVariant string) error {
+	var err error
+	prep := func(q string) *sql.Stmt {
+		if err != nil {
+			return nil
+		}
+		var st *sql.Stmt
+		st, err = s.writeDB.PrepareContext(ctx, q)
+		return st
+	}
+
+	s.stmtCandJoin = prep(candidateSQLJoin)
+	if schemaVariant != "baseline" {
+		s.stmtCandIdx = prep(candidateSQLIndexed)
+	} else {
+		s.stmtCandIdx = prep(candidateSQLJoin)
+	}
+	s.stmtScanMailbox = prep(`SELECT id, conversation_id, priority, attempts, created_at FROM wakeups WHERE agent_id = ? AND status = 'queued' AND not_before <= ? ORDER BY priority DESC, created_at`)
+	s.stmtClaimOne = prep(`UPDATE wakeups SET status = 'claimed', run_id = ?, attempts = attempts + 1 WHERE agent_id = ? AND id = ?`)
+	s.stmtClaimBatch20 = prep(`UPDATE wakeups SET status = 'claimed', run_id = ?, attempts = attempts + 1 WHERE agent_id = ? AND id IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	s.stmtRecomputeSel = prep(`SELECT priority, created_at FROM wakeups WHERE agent_id = ? AND status = 'queued' AND not_before <= ? ORDER BY priority DESC, created_at LIMIT 1`)
+	s.stmtAgentReadyOn = prep(`UPDATE agents SET ready = 1, ready_priority = ?, ready_since = ? WHERE id = ?`)
+	s.stmtAgentReadyOff = prep(`UPDATE agents SET ready = 0, ready_priority = 0, ready_since = NULL WHERE id = ?`)
+	s.stmtAgentClaimUpdate = prep(`UPDATE agents SET active_run_id = ?, ready = ?, ready_priority = ?, ready_since = ? WHERE id = ?`)
+	s.stmtInsertRun = prep(`INSERT INTO runs (id, agent_id, conversation_id, status, priority, engine, model, attempt, started_at) VALUES (?, ?, ?, 'running', ?, 'agy', 'default', ?, ?)`)
+	s.stmtTeamAddDelta = prep(`UPDATE teams SET running = running + ? WHERE id = ?`)
+	s.stmtFinishRun = prep(`UPDATE runs SET status = 'succeeded', turns = 1, ended_at = ? WHERE id = ?`)
+	s.stmtFinishWakeups = prep(`UPDATE wakeups SET status = 'done' WHERE run_id = ? AND status = 'claimed'`)
+	s.stmtFinishAgent = prep(`UPDATE agents SET active_run_id = NULL, last_run_at = ?, cooldown_until = ? WHERE id = ?`)
+	s.stmtTeamDec = prep(`UPDATE teams SET running = running - 1 WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("prepare statements: %w", err)
+	}
+	return nil
 }
 
 func (s *store) close() error {
-	err1 := s.readDB.Close()
-	err2 := s.writeDB.Close()
+	stmts := []*sql.Stmt{
+		s.stmtCandJoin, s.stmtCandIdx, s.stmtScanMailbox,
+		s.stmtClaimOne, s.stmtClaimBatch20, s.stmtRecomputeSel,
+		s.stmtAgentReadyOn, s.stmtAgentReadyOff, s.stmtAgentClaimUpdate,
+		s.stmtInsertRun, s.stmtTeamAddDelta, s.stmtFinishRun,
+		s.stmtFinishWakeups, s.stmtFinishAgent, s.stmtTeamDec,
+	}
+	for _, st := range stmts {
+		if st != nil {
+			_ = st.Close()
+		}
+	}
+	var err1, err2 error
+	if s.readDB != nil {
+		err1 = s.readDB.Close()
+	}
+	if s.writeDB != nil {
+		err2 = s.writeDB.Close()
+	}
 	if err1 != nil {
 		return err1
 	}
 	return err2
 }
 
-func recomputeAgentReadyTx(ctx context.Context, tx *sql.Tx, agentID string, nowMS int64) error {
+func (s *store) recomputeAgentReadyTx(ctx context.Context, tx *sql.Tx, agentID string, nowMS int64) error {
 	var prio int
 	var createdAt int64
-	err := tx.QueryRowContext(ctx, `
-		SELECT priority, created_at
-		FROM wakeups
-		WHERE agent_id = ? AND status = 'queued' AND not_before <= ?
-		ORDER BY priority DESC, created_at
-		LIMIT 1`, agentID, nowMS,
-	).Scan(&prio, &createdAt)
+	err := tx.StmtContext(ctx, s.stmtRecomputeSel).QueryRowContext(ctx, agentID, nowMS).Scan(&prio, &createdAt)
 	if err == sql.ErrNoRows {
-		_, uerr := tx.ExecContext(ctx, `
-			UPDATE agents
-			SET ready = 0, ready_priority = 0, ready_since = NULL
-			WHERE id = ?`, agentID)
+		_, uerr := tx.StmtContext(ctx, s.stmtAgentReadyOff).ExecContext(ctx, agentID)
 		return uerr
 	}
 	if err != nil {
 		return err
 	}
-	_, uerr := tx.ExecContext(ctx, `
-		UPDATE agents
-		SET ready = 1, ready_priority = ?, ready_since = ?
-		WHERE id = ?`, prio, createdAt, agentID)
+	_, uerr := tx.StmtContext(ctx, s.stmtAgentReadyOn).ExecContext(ctx, prio, createdAt, agentID)
 	return uerr
 }
 
-const candidateSQLJoin = `
-SELECT a.id, a.team_id
-FROM agents a JOIN teams t ON t.id = a.team_id
-WHERE a.ready = 1 AND a.active_run_id IS NULL AND a.status = 'active'
-  AND a.cooldown_until <= ?
-  AND t.running < t.max_running
-  AND (a.engine_mask & ?) != 0
-ORDER BY a.ready_priority DESC, a.ready_since
-LIMIT ?`
-
-const candidateSQLIndexed = `
-SELECT a.id, a.team_id
-FROM agents a INDEXED BY agents_ready
-JOIN teams t ON t.id = a.team_id
-WHERE a.ready = 1 AND a.active_run_id IS NULL AND a.status = 'active'
-  AND a.cooldown_until <= ?
-  AND t.running < t.max_running
-  AND (a.engine_mask & ?) != 0
-ORDER BY a.ready_priority DESC, a.ready_since
-LIMIT ?`
-
-// claimWork executes one BEGIN IMMEDIATE claim cycle per Spec 8.2.2.
-func (s *store) claimWork(ctx context.Context, freeSlots int, engineMask int, nowMS int64, forceIndexed bool) ([]claimedRun, time.Duration, error) {
+// claimWork executes one BEGIN IMMEDIATE claim cycle per Spec 8.2.2 using a single-pass covering-index scan per agent.
+func (s *store) claimWork(ctx context.Context, freeSlots int, engineMask int, nowMS int64, forceIndexed bool) ([]claimedRun, time.Duration, time.Duration, error) {
 	if freeSlots <= 0 {
-		return nil, 0, nil
+		return nil, 0, 0, nil
 	}
-	t0 := time.Now()
+	tCall := time.Now()
 	tx, err := s.writeDB.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, 0, fmt.Errorf("begin immediate: %w", err)
+		return nil, 0, 0, fmt.Errorf("begin immediate: %w", err)
 	}
+	tExec := time.Now()
 	defer func() { _ = tx.Rollback() }()
 
-	query := candidateSQLJoin
+	candStmt := s.stmtCandJoin
 	if forceIndexed {
-		query = candidateSQLIndexed
+		candStmt = s.stmtCandIdx
 	}
-	// Over-fetch slightly (freeSlots*3) in case multiple candidates belong to a team hitting max_running in the same tx.
-	rows, err := tx.QueryContext(ctx, query, nowMS, engineMask, freeSlots*3)
+	rows, err := tx.StmtContext(ctx, candStmt).QueryContext(ctx, nowMS, engineMask, freeSlots*3)
 	if err != nil {
-		return nil, 0, fmt.Errorf("select candidates: %w", err)
+		return nil, 0, 0, fmt.Errorf("select candidates: %w", err)
 	}
-	type cand struct{ agentID, teamID string }
-	var cands []cand
+	type cand struct {
+		agentID, teamID     string
+		running, maxRunning int
+	}
+	cands := make([]cand, 0, freeSlots*3)
 	for rows.Next() {
 		var c cand
-		if err := rows.Scan(&c.agentID, &c.teamID); err != nil {
+		if err := rows.Scan(&c.agentID, &c.teamID, &c.running, &c.maxRunning); err != nil {
 			_ = rows.Close()
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 		cands = append(cands, c)
 	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, 0, 0, err
+	}
 	if err := rows.Close(); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
+	teamAdded := make(map[string]int, len(cands))
 	claimed := make([]claimedRun, 0, freeSlots)
+
 	for _, c := range cands {
 		if len(claimed) >= freeSlots {
 			break
 		}
-		// Re-check team cap after prior claims in the same transaction (Spec 8.2.2 step 3)
-		var running, maxRunning int
-		if err := tx.QueryRowContext(ctx, `SELECT running, max_running FROM teams WHERE id = ?`, c.teamID).Scan(&running, &maxRunning); err != nil {
-			return nil, 0, err
-		}
-		if running >= maxRunning {
+		if c.running+teamAdded[c.teamID] >= c.maxRunning {
 			continue
 		}
 
-		// Step 1: Highest priority queued wakeup for this agent
-		var firstID, convID string
-		var topPrio, firstAttempts int
-		err := tx.QueryRowContext(ctx, `
-			SELECT id, conversation_id, priority, attempts
-			FROM wakeups
-			WHERE agent_id = ? AND status = 'queued' AND not_before <= ?
-			ORDER BY priority DESC, created_at
-			LIMIT 1`, c.agentID, nowMS,
-		).Scan(&firstID, &convID, &topPrio, &firstAttempts)
-		if err == sql.ErrNoRows {
-			if err := recomputeAgentReadyTx(ctx, tx, c.agentID, nowMS); err != nil {
-				return nil, 0, err
-			}
-			continue
-		}
+		// Single-pass scan on covering index `wakeups_mailbox`: collects up to 20 same-conversation wakeups
+		// AND identifies the exact next-highest remaining due wakeup (`nextReady`) in one sequential leaf walk.
+		mRows, err := tx.StmtContext(ctx, s.stmtScanMailbox).QueryContext(ctx, c.agentID, nowMS)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
-
-		// Step 2: Up to 19 more queued wakeups of the SAME conversation
-		wRows, err := tx.QueryContext(ctx, `
-			SELECT id
-			FROM wakeups
-			WHERE agent_id = ? AND status = 'queued' AND not_before <= ?
-			  AND conversation_id = ? AND id <> ?
-			ORDER BY priority DESC, created_at
-			LIMIT 19`, c.agentID, nowMS, convID, firstID)
-		if err != nil {
-			return nil, 0, err
-		}
-		wIDs := []string{firstID}
-		for wRows.Next() {
+		var (
+			wIDs          = make([]string, 0, 20)
+			firstConvNull sql.NullString
+			topPrio       int
+			firstAttempts int
+			haveNextReady bool
+			nextPrio      int
+			nextSince     int64
+		)
+		for mRows.Next() {
 			var wid string
-			if err := wRows.Scan(&wid); err != nil {
-				_ = wRows.Close()
-				return nil, 0, err
+			var convNull sql.NullString
+			var prio, att int
+			var createdAt int64
+			if err := mRows.Scan(&wid, &convNull, &prio, &att, &createdAt); err != nil {
+				_ = mRows.Close()
+				return nil, 0, 0, err
 			}
-			wIDs = append(wIDs, wid)
+			if len(wIDs) == 0 {
+				wIDs = append(wIDs, wid)
+				firstConvNull = convNull
+				topPrio = prio
+				firstAttempts = att
+				continue
+			}
+			if firstConvNull.Valid && firstConvNull.String != "" && convNull.Valid && convNull.String == firstConvNull.String && len(wIDs) < 20 {
+				wIDs = append(wIDs, wid)
+				continue
+			}
+			if !haveNextReady {
+				haveNextReady = true
+				nextPrio = prio
+				nextSince = createdAt
+			}
+			if len(wIDs) >= 20 || !firstConvNull.Valid || firstConvNull.String == "" {
+				break
+			}
 		}
-		_ = wRows.Close()
+		if err := mRows.Err(); err != nil {
+			_ = mRows.Close()
+			return nil, 0, 0, err
+		}
+		if err := mRows.Close(); err != nil {
+			return nil, 0, 0, err
+		}
 
-		// Step 4: Create run, mark wakeups claimed, update agent & team
+		if len(wIDs) == 0 {
+			if err := s.recomputeAgentReadyTx(ctx, tx, c.agentID, nowMS); err != nil {
+				return nil, 0, 0, err
+			}
+			continue
+		}
+
+		convID := firstConvNull.String
+		if !firstConvNull.Valid || convID == "" {
+			convID = newID()
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO conversations (id, agent_id, task_id, thread_id) VALUES (?, ?, NULL, ?)`,
+				convID, c.agentID, "sys:"+wIDs[0],
+			); err != nil {
+				return nil, 0, 0, fmt.Errorf("create fallback conversation: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE wakeups SET conversation_id = ? WHERE agent_id = ? AND id = ?`,
+				convID, c.agentID, wIDs[0],
+			); err != nil {
+				return nil, 0, 0, err
+			}
+		}
+
 		runID := newID()
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO runs (id, agent_id, conversation_id, status, priority, engine, model, attempt, started_at)
-			VALUES (?, ?, ?, 'running', ?, 'agy', 'default', ?, ?)`,
+		if _, err := tx.StmtContext(ctx, s.stmtInsertRun).ExecContext(ctx,
 			runID, c.agentID, convID, topPrio, firstAttempts+1, nowMS,
 		); err != nil {
-			return nil, 0, fmt.Errorf("insert run: %w", err)
+			return nil, 0, 0, fmt.Errorf("insert run: %w", err)
 		}
 
-		placeholders := strings.Repeat("?,", len(wIDs))
-		placeholders = placeholders[:len(placeholders)-1]
-		args := make([]any, 0, len(wIDs)+2)
-		args = append(args, runID, c.agentID)
-		for _, id := range wIDs {
-			args = append(args, id)
+		if len(wIDs) == 1 {
+			if _, err := tx.StmtContext(ctx, s.stmtClaimOne).ExecContext(ctx, runID, c.agentID, wIDs[0]); err != nil {
+				return nil, 0, 0, fmt.Errorf("claim 1 wakeup: %w", err)
+			}
+		} else {
+			var args [22]any
+			args[0] = runID
+			args[1] = c.agentID
+			for i := range 20 {
+				if i < len(wIDs) {
+					args[i+2] = wIDs[i]
+				} else {
+					args[i+2] = wIDs[0]
+				}
+			}
+			if _, err := tx.StmtContext(ctx, s.stmtClaimBatch20).ExecContext(ctx, args[:]...); err != nil {
+				return nil, 0, 0, fmt.Errorf("claim wakeup batch: %w", err)
+			}
 		}
-		if _, err := tx.ExecContext(ctx,
-			fmt.Sprintf(`UPDATE wakeups SET status = 'claimed', run_id = ?, attempts = attempts + 1 WHERE agent_id = ? AND id IN (%s)`, placeholders),
-			args...,
+
+		var readyInt int
+		var readySinceArg any
+		if haveNextReady {
+			readyInt = 1
+			readySinceArg = nextSince
+		}
+		if _, err := tx.StmtContext(ctx, s.stmtAgentClaimUpdate).ExecContext(ctx,
+			runID, readyInt, nextPrio, readySinceArg, c.agentID,
 		); err != nil {
-			return nil, 0, fmt.Errorf("claim wakeups: %w", err)
+			return nil, 0, 0, err
 		}
 
-		if _, err := tx.ExecContext(ctx, `UPDATE agents SET active_run_id = ? WHERE id = ?`, runID, c.agentID); err != nil {
-			return nil, 0, err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE teams SET running = running + 1 WHERE id = ?`, c.teamID); err != nil {
-			return nil, 0, err
-		}
-		if err := recomputeAgentReadyTx(ctx, tx, c.agentID, nowMS); err != nil {
-			return nil, 0, err
-		}
-
+		teamAdded[c.teamID]++
 		claimed = append(claimed, claimedRun{
 			RunID:          runID,
 			AgentID:        c.agentID,
@@ -259,111 +375,14 @@ func (s *store) claimWork(ctx context.Context, freeSlots int, engineMask int, no
 		})
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, 0, fmt.Errorf("commit claim: %w", err)
-	}
-	return claimed, time.Since(t0), nil
-}
-
-func (s *store) finishRun(ctx context.Context, cr claimedRun, cooldownMS int64, nowMS int64) error {
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE runs SET status = 'succeeded', turns = 1, ended_at = ? WHERE id = ?`,
-		nowMS, cr.RunID,
-	); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE wakeups SET status = 'done' WHERE run_id = ? AND status = 'claimed'`,
-		cr.RunID,
-	); err != nil {
-		return err
-	}
-	cdUntil := int64(0)
-	if cr.Priority < 100 && cooldownMS > 0 {
-		cdUntil = nowMS + cooldownMS
-	}
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE agents SET active_run_id = NULL, last_run_at = ?, cooldown_until = ? WHERE id = ?`,
-		nowMS, cdUntil, cr.AgentID,
-	); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE teams SET running = running - 1 WHERE id = ?`,
-		cr.TeamID,
-	); err != nil {
-		return err
-	}
-	if err := recomputeAgentReadyTx(ctx, tx, cr.AgentID, nowMS); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// recoverOnBoot implements Spec 8.2.5 startup crash recovery.
-func (s *store) recoverOnBoot(ctx context.Context, nowMS int64) (int64, int64, error) {
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	resRuns, err := tx.ExecContext(ctx, `
-		UPDATE runs SET status = 'interrupted', ended_at = ? WHERE status = 'running'`, nowMS)
-	if err != nil {
-		return 0, 0, err
-	}
-	interruptedRuns, _ := resRuns.RowsAffected()
-
-	// Find affected agents before clearing claimed wakeups
-	rows, err := tx.QueryContext(ctx, `
-		SELECT DISTINCT agent_id FROM wakeups WHERE status = 'claimed'
-		UNION
-		SELECT id FROM agents WHERE active_run_id IS NOT NULL`)
-	if err != nil {
-		return 0, 0, err
-	}
-	var agentIDs []string
-	for rows.Next() {
-		var aid string
-		if err := rows.Scan(&aid); err != nil {
-			_ = rows.Close()
-			return 0, 0, err
-		}
-		agentIDs = append(agentIDs, aid)
-	}
-	_ = rows.Close()
-
-	resWake, err := tx.ExecContext(ctx, `
-		UPDATE wakeups SET status = 'queued', run_id = NULL WHERE status = 'claimed'`)
-	if err != nil {
-		return 0, 0, err
-	}
-	requeuedWakeups, _ := resWake.RowsAffected()
-
-	if _, err := tx.ExecContext(ctx, `UPDATE agents SET active_run_id = NULL WHERE active_run_id IS NOT NULL`); err != nil {
-		return 0, 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE teams SET running = COALESCE((
-			SELECT COUNT(*) FROM runs r JOIN agents a ON a.id = r.agent_id
-			WHERE a.team_id = teams.id AND r.status = 'running'
-		), 0)`); err != nil {
-		return 0, 0, err
-	}
-	for _, aid := range agentIDs {
-		if err := recomputeAgentReadyTx(ctx, tx, aid, nowMS); err != nil {
-			return 0, 0, err
+	for tid, delta := range teamAdded {
+		if _, err := tx.StmtContext(ctx, s.stmtTeamAddDelta).ExecContext(ctx, delta, tid); err != nil {
+			return nil, 0, 0, err
 		}
 	}
+
 	if err := tx.Commit(); err != nil {
-		return 0, 0, err
+		return nil, 0, 0, fmt.Errorf("commit claim: %w", err)
 	}
-	return interruptedRuns, requeuedWakeups, nil
+	return claimed, time.Since(tCall), time.Since(tExec), nil
 }

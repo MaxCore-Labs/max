@@ -1,4 +1,10 @@
--- Copied from docs/superpowers/specs/2026-11-13-max-assistant-design.md Section 9
+-- Optimized S4 Actor Schema derived from Spec Section 9.
+-- Differences vs original Spec Section 9 (`schema_baseline.sql`):
+--   1. `wakeups` uses `PRIMARY KEY (agent_id, id) WITHOUT ROWID` to cluster each agent's mailbox physically;
+--      all wakeup queries must supply `agent_id` (or `run_id` via `wakeups_run`).
+--   2. `wakeups_due` adds `AND not_before > 0` so immediate wakeups (`not_before = 0`) never bloat the timer index.
+--   3. `wakeups_mailbox` covers `(agent_id, priority DESC, created_at, conversation_id, not_before, attempts, id)`.
+--   4. Added partial index `wakeups_run ON wakeups (run_id) WHERE status = 'claimed'` (leaf implicitly carries `agent_id, id`).
 CREATE TABLE teams (
   id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
   mandate TEXT NOT NULL DEFAULT '{}',
@@ -74,7 +80,7 @@ CREATE UNIQUE INDEX wakeups_idem ON wakeups (idempotency_key)
   WHERE idempotency_key IS NOT NULL AND status IN ('queued','claimed');
 CREATE INDEX wakeups_mailbox ON wakeups (agent_id, priority DESC, created_at, conversation_id, not_before, attempts, id)
   WHERE status = 'queued';
-CREATE INDEX wakeups_run ON wakeups (run_id, agent_id)
+CREATE INDEX wakeups_run ON wakeups (run_id)
   WHERE status = 'claimed';
 
 CREATE TABLE runs (

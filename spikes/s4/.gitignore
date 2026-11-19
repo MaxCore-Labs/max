@@ -1,4 +1,6 @@
+s4
 *.exe
+bin/
 *.db
 *.db-wal
 *.db-shm

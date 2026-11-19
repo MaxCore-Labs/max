@@ -429,24 +429,24 @@ func (s *Actors) Wake(ctx context.Context, tx Tx, in WakeInput) (id uuid.UUID, c
 
 **Wakeup chỉ là thông báo; nội dung nằm ở bảng bền.** Tin nhắn nằm trong `task_events`/`messages`, kết quả duyệt trong `approvals`, task trong `tasks`. Payload của wakeup chỉ mang tham chiếu. Nhờ vậy gộp wakeup không bao giờ làm mất nội dung.
 
-**Trạng thái sẵn sàng là giá trị dẫn xuất, luôn tính lại trong giao dịch ghi:** `ready = tồn tại wakeup queued có not_before <= now`; `ready_priority` = ưu tiên cao nhất trong số đó; `ready_since` = thời điểm tạo của wakeup đó. Tính lại tại ba chỗ: trong `Wake`, khi run kết thúc, và khi scheduler thấy một wakeup hẹn giờ (`not_before`) đến hạn. Vì chỉ có một kết nối ghi, không có khe hở giữa "run kết thúc" và "wakeup mới đến".
+**Trạng thái sẵn sàng là giá trị dẫn xuất, luôn tính lại trong giao dịch ghi:** `ready = tồn tại wakeup queued có not_before <= now`; `ready_priority` = ưu tiên cao nhất trong số đó; `ready_since` = thời điểm tạo của wakeup đó. Tính lại tại bốn chỗ: trong `Wake`, ngay khi nhận việc (`Claim`), khi run kết thúc / khôi phục, và khi scheduler thấy một wakeup hẹn giờ (`not_before > 0`) đến hạn. Vì chỉ có một kết nối ghi, không có khe hở giữa "run kết thúc" và "wakeup mới đến".
 
 #### 8.2.2 Nhận việc: lên lịch **agent**, không lên lịch từng tin
 
 Vòng nhận việc chạy khi có chỗ trống hoặc có `Wake` mới (tín hiệu trong tiến trình), và mỗi 2 giây làm lưới đỡ. Trong một giao dịch ghi (`BEGIN IMMEDIATE`):
 
 ```sql
-SELECT a.id
+SELECT a.id, a.team_id
 FROM agents a JOIN teams t ON t.id = a.team_id
 WHERE a.ready = 1 AND a.active_run_id IS NULL AND a.status = 'active'
-  AND a.cooldown_until <= :now
+  AND (a.cooldown_until <= :now OR a.ready_priority >= 100)
   AND t.running < t.max_running
   AND (a.engine_mask & :mặt_nạ_engine_còn_chỗ_và_còn_hạn_mức) != 0
 ORDER BY a.ready_priority DESC, a.ready_since
-LIMIT :tổng_số_chỗ_trống;
+LIMIT :tổng_số_chỗ_trống * 3;
 ```
 
-Chỉ mục riêng phần: `(ready_priority DESC, ready_since) WHERE ready = 1 AND active_run_id IS NULL AND status = 'active'`. Chi phí nhận việc không phụ thuộc Q.
+Chỉ mục riêng phần: `(ready_priority DESC, ready_since) WHERE ready = 1 AND active_run_id IS NULL AND status = 'active'`. Lấy dư gấp 3 số chỗ trống để khi nhiều ứng viên đầu thuộc cùng một team vừa chạm `max_running`, giao dịch vẫn chọn đủ ứng viên của các team khác **[ĐÃ KIỂM S4]**.
 
 `engine_mask` là mặt nạ bit của danh sách `engines` agent khai (claude = 1, codex = 2, agy = 4), nên một agent chỉ được chọn khi ít nhất một CLI của nó đang còn chỗ và còn hạn mức.
 
@@ -469,7 +469,7 @@ Sau khi commit mới sinh tiến trình CLI. Không giao dịch nào mở trong 
 | Không mất wakeup | Wakeup chỉ thành `done` trong cùng giao dịch kết thúc run; run chết thì wakeup trở lại `queued` |
 | Không run đôi do lịch | Khóa idempotency `routine:<slug>:<phút>` |
 | Hộp thư không phình vô hạn | Wakeup loại `message`, `task_update`, `heartbeat`, `routine` cùng conversation luôn **gộp** thành một (không mất gì, vì nội dung ở bảng bền). Wakeup loại `task_assigned`, `child_done`, `approval_result`, `owner_reply` **không bao giờ gộp hay bỏ**. Khi hộp thư của một agent vượt 200 mục: `delegate`/`message_agent` gửi tới agent đó trả lỗi "hộp thư đầy" cho người gửi (áp lực ngược), và chủ nhân nhận cảnh báo |
-| Wakeup độc không chạy mãi | Mỗi wakeup có `attempts`; sau 3 lần run kết thúc `failed`/`interrupted` mà chưa xử lý xong: wakeup `dropped`, task sang `blocked(error)`, tạo mục Inbox |
+| Wakeup độc không chạy mãi | Mỗi wakeup tăng `attempts` khi được nhận; chạm đủ 3 lần (`attempts >= 3`) mà kết thúc `failed` hoặc khôi phục sau crash `interrupted`: wakeup `dropped`, task sang `blocked(error)`, tạo mục Inbox. Riêng tắt chủ đích (`SIGTERM`, 8.15) hoàn lại `attempts - 1` để deploy không làm rơi việc lành mạnh |
 | Không bỏ im lặng | Mọi lần gộp, bỏ lượt, từ chối đều có dòng trong `run_events` hoặc `inbox_items` |
 
 #### 8.2.4 Công bằng và áp lực ngược
@@ -486,7 +486,7 @@ Sau khi commit mới sinh tiến trình CLI. Không giao dịch nào mở trong 
 
 #### 8.2.5 Khởi động lại
 
-Khi `max` khởi động: diệt mọi tiến trình CLI mồ côi (theo nhóm tiến trình đã ghi trong `runs.pgid`); mọi run `running` -> `interrupted`; wakeup `claimed` của chúng -> `queued`; `active_run_id = NULL`; đếm lại `teams.running`. Agent sẽ được nhận lại và chạy tiếp phiên cũ (8.3).
+Khi `max` khởi động: diệt mọi tiến trình CLI mồ côi (theo nhóm tiến trình đã ghi trong `runs.pgid`); mọi run `running` (`ended_at IS NULL`) -> `interrupted`; wakeup `claimed` có `attempts >= 3` -> `dropped` (kèm mục Inbox), còn lại -> `queued` (`run_id = NULL`); `active_run_id = NULL`; đếm lại `teams.running` và `agents.ready`. Agent sẽ được nhận lại và chạy tiếp phiên cũ (8.3).
 
 ### 8.3 Vòng đời run (`app/run`)
 
@@ -519,7 +519,7 @@ queued (wakeup) -> running -> succeeded | failed | cancelled | timed_out | turn_
 | `parked` | `done` | giữ nguyên | Chờ wakeup kết quả (duyệt, chủ nhân, task con) |
 | `turn_limit`, `timed_out` | `done` | giữ `in_progress` | Max tự tạo wakeup `continue` cho cùng conversation, trừ khi task đã quá 400 lượt hoặc 3 run liên tiếp không tiến triển: khi đó task `blocked(stalled)` + chuyển cấp |
 | `quota_stopped` | về `queued` (không tính `attempts`) | giữ nguyên | Chạy lại khi hạn mức mở |
-| `interrupted`, `failed` | về `queued` (`attempts + 1`) | giữ nguyên | Chạy lại; quá 3 lần thì `dropped` + task `blocked(error)` + Inbox |
+| `interrupted`, `failed` | về `queued` (`attempts` đã tăng lúc nhận; tắt chủ đích `SIGTERM` thì hoàn lại `attempts - 1`) | giữ nguyên | Chạy lại; chạm `attempts >= 3` thì `dropped` + task `blocked(error)` + Inbox |
 | `cancelled` (chủ nhân bấm) | về `queued` nếu chủ nhân chọn "Dừng việc đó"; `dropped` nếu chọn hủy hẳn | theo lựa chọn | |
 
 `tasks.checkout_run_id` là khóa thực thi **theo run**: luôn được xóa khi run kết thúc, bất kể kiểu nào. Trạng thái `in_progress` và người được giao thì giữ.
@@ -1222,7 +1222,7 @@ Max là bảng điều khiển vận hành: chủ nhân mở nhiều lần mỗi
 |---|---|
 | Log | `slog` JSON ra stdout, qua `redact`; mỗi dòng có `run_id`, `agent_id` |
 | Health | `healthz`; `max healthcheck` |
-| Tắt | SIGTERM: ngừng nhận việc -> hủy các run (grace 10 giây; chúng thành `interrupted` và sẽ resume) -> push vault -> đóng DB |
+| Tắt | SIGTERM: ngừng nhận việc -> hủy các run (grace 10 giây; chúng thành `interrupted`, hoàn lại `attempts - 1` cho wakeup để không tính là lỗi crash, và sẽ resume) -> push vault -> đóng DB |
 | Lệnh con | `max serve`, `max migrate`, `max healthcheck`, `max admin set-password`, `max hook`, `max loadtest`, `max doctor` (kiểm CLI đã đăng nhập, phiên bản, phụ thuộc) |
 | Mất đăng nhập CLI | `Health` phát hiện -> engine `unavailable` -> mọi việc xếp hàng -> thông báo chủ nhân kèm lệnh đăng nhập lại |
 | Binary CLI bị đổi | Max ghi SHA-256 và phiên bản của từng binary CLI lúc chủ nhân bật engine. Khi khởi động và mỗi giờ: băm khác đi (CLI tự cập nhật hoặc bị thay) -> engine `unavailable`, thông báo chủ nhân. Chủ nhân xác nhận bản mới sau khi chạy bộ eval hành vi (mục 11) |
@@ -1260,7 +1260,7 @@ Container chạy non-root, `cap_drop: ALL`, `no-new-privileges`, rootfs read-onl
 
 ## 9. Schema SQLite (lõi điều phối)
 
-`PRAGMA journal_mode=WAL; synchronous=NORMAL; foreign_keys=ON; busy_timeout=5000`. Một kết nối ghi (mọi giao dịch ghi `BEGIN IMMEDIATE`), nhiều kết nối đọc. ID là UUID v7 dạng TEXT sinh ở tầng `app`. Thời gian là epoch ms kiểu INTEGER.
+`PRAGMA journal_mode=WAL; synchronous=NORMAL; foreign_keys=ON; busy_timeout=5000`. Một kết nối ghi (`cache_size=-131072` = 128 MiB, `wal_autocheckpoint=16000` kèm `wal_checkpoint(PASSIVE)` định kỳ, mọi giao dịch ghi `BEGIN IMMEDIATE`), pool 8 kết nối đọc (`cache_size=-4096` = 4 MiB/kết nối, `query_only=1`; tổng trần page cache riêng <= 160 MiB + 512 MiB `mmap` dùng chung) **[ĐÃ KIỂM S4]**. ID là UUID v7 dạng TEXT sinh ở tầng `app`. Thời gian là epoch ms kiểu INTEGER.
 
 ```sql
 CREATE TABLE teams (
@@ -1318,7 +1318,7 @@ CREATE TABLE conversations (
 );
 
 CREATE TABLE wakeups (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
   agent_id TEXT NOT NULL REFERENCES agents(id),
   conversation_id TEXT REFERENCES conversations(id),
   kind TEXT NOT NULL, priority INTEGER NOT NULL,
@@ -1331,13 +1331,16 @@ CREATE TABLE wakeups (
   attempts INTEGER NOT NULL DEFAULT 0,           -- số lần đã được một run nhận
   cause_run_id TEXT, hops INTEGER NOT NULL DEFAULT 0,
   not_before INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX wakeups_due ON wakeups (not_before) WHERE status = 'queued';
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (agent_id, id)                     -- cụm hóa theo agent_id; mọi truy vấn phải kèm agent_id (hoặc run_id)
+) WITHOUT ROWID;
+CREATE INDEX wakeups_due ON wakeups (not_before) WHERE status = 'queued' AND not_before > 0; -- câu quét của scheduler bắt buộc ghi `not_before > 0`
 CREATE UNIQUE INDEX wakeups_idem ON wakeups (idempotency_key)
   WHERE idempotency_key IS NOT NULL AND status IN ('queued','claimed');
-CREATE INDEX wakeups_mailbox ON wakeups (agent_id, priority DESC, created_at)
+CREATE INDEX wakeups_mailbox ON wakeups (agent_id, priority DESC, created_at, conversation_id, not_before, attempts, id)
   WHERE status = 'queued';
+CREATE INDEX wakeups_run ON wakeups (run_id)
+  WHERE status = 'claimed';
 
 CREATE TABLE goals (
   id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
@@ -1518,7 +1521,7 @@ Các bảng còn lại (cột chính):
 | I5 | Mỗi task có tối đa 1 `checkout_run_id` đang hoạt động | Test đua |
 | I6 | Lời gọi cần duyệt chỉ chạy sau khi được duyệt, đúng một lần, đúng input đã duyệt | Test luồng duyệt, kể cả bấm hai lần |
 | I7 | Sau khi `max` bị giết bất kỳ lúc nào: không còn tiến trình CLI mồ côi, không run nào kẹt `running`, không wakeup nào mất | Test hỗn loạn |
-| I8 | Thời gian nhận việc p95 không tăng khi Q tăng từ 1.000 lên 1.000.000 | Benchmark |
+| I8 | Thời gian nhận việc `p95 < 20 ms`, `p99 < 50 ms` ở mọi mức `Q` từ 1.000 tới 1.000.000 (độ tăng `p95 < 10 ms` theo `O(log Q)`) | Benchmark |
 | I9 | Tin nhắn của chủ nhân tới một agent **đang rảnh** bắt đầu chạy trong <= 5 giây dù hàng đợi nền đầy (agent đang bận: xem 8.2.4) | loadtest |
 | I10 | Việc nền không được nhận khi cửa sổ ngắn >= phần chia cho nó | Test bộ điều tiết với engine giả |
 | I11 | Không agent nào chờ vô hạn khi còn chỗ và còn hạn mức | Test công bằng với 1 agent ồn |
