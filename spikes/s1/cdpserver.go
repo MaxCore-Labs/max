@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,80 +20,22 @@ import (
 
 type browserHost interface {
 	VersionURL(fingerprint string) string
-	MeasureRSSMB() (float64, int)
+	MeasureMemoryMB() (pssMB float64, rssMB float64, procs int, err error)
 	Close() error
+	ForceKill() error
 }
 
-// dockerCloakHost drives `cloakhq/cloakbrowser cloakserve` when CLOAKBROWSER_LICENSE_KEY is set.
-type dockerCloakHost struct {
-	containerName string
-	port          int
-}
+var safeSeedRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
-func startDockerCloakHost(ctx context.Context, dataDir, licenseKey string, port int) (*dockerCloakHost, error) {
-	name := fmt.Sprintf("max-s1-cloak-%d", port)
-	_ = exec.Command("docker", "rm", "-f", name).Run()
-
-	absData, err := filepath.Abs(dataDir)
-	if err != nil {
-		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, "docker", "run", "-d", "--rm",
-		"--name", name,
-		"-p", fmt.Sprintf("127.0.0.1:%d:9222", port),
-		"-v", fmt.Sprintf("%s:/data", absData),
-		"-e", "CLOAKBROWSER_LICENSE_KEY="+licenseKey,
-		"cloakhq/cloakbrowser",
-		"cloakserve", "--data-dir=/data", "--keep-profiles",
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("docker run cloakbrowser: %w (%s)", err, string(out))
-	}
-	h := &dockerCloakHost{containerName: name, port: port}
-	deadline := time.Now().Add(45 * time.Second)
-	for time.Now().Before(deadline) {
-		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/json/version?fingerprint=probe", port))
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return h, nil
-			}
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	_ = h.Close()
-	return nil, fmt.Errorf("cloakserve container did not become ready on port %d", port)
-}
-
-func (h *dockerCloakHost) VersionURL(fp string) string {
-	return fmt.Sprintf("http://127.0.0.1:%d/json/version?fingerprint=%s", h.port, fp)
-}
-
-func (h *dockerCloakHost) MeasureRSSMB() (float64, int) {
-	out, err := exec.Command("docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", h.containerName).Output()
-	if err != nil {
-		return 0, 1
-	}
-	fields := strings.Fields(string(out))
-	if len(fields) == 0 {
-		return 0, 1
-	}
-	raw := strings.TrimSuffix(fields[0], "MiB")
-	v, _ := strconv.ParseFloat(raw, 64)
-	return v, 1
-}
-
-func (h *dockerCloakHost) Close() error {
-	return exec.Command("docker", "rm", "-f", h.containerName).Run()
-}
-
-// localCDPShim emulates `cloakserve --data-dir=<dir> --keep-profiles` over local headless Chromium
-// when CLOAKBROWSER_LICENSE_KEY is not configured on the dev machine.
+// localCDPShim emulates `cloakserve --data-dir=<dir> --keep-profiles` (including
+// `/fingerprint/{seed}/devtools/...` URL rewriting and `POST /fingerprint/{seed}/close`)
+// over local headless Chromium when CLOAKBROWSER_LICENSE_KEY is absent.
 type localCDPShim struct {
-	chromeBin string
-	dataDir   string
-	ln        net.Listener
-	srv       *http.Server
+	chromeBin     string
+	chromeVersion string
+	dataDir       string
+	ln            net.Listener
+	srv           *http.Server
 
 	mu    sync.Mutex
 	procs map[string]*shimBrowser
@@ -106,38 +46,40 @@ type shimBrowser struct {
 	cdpPort int
 }
 
-func findChromiumBinary() (string, error) {
-	candidates := []string{
+func findChromiumBinary() (string, string, error) {
+	var candidates []string
+	if p := strings.TrimSpace(os.Getenv("CHROME_BIN")); p != "" {
+		candidates = append(candidates, p)
+	}
+	for _, name := range []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"} {
+		if p, err := exec.LookPath(name); err == nil {
+			candidates = append(candidates, p)
+		}
+	}
+	candidates = append(candidates,
+		`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`,
 		`C:\Program Files\Google\Chrome\Application\chrome.exe`,
 		`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
 		`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
-	}
+	)
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
-			return c, nil
+			ver := filepath.Base(c)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			if out, vErr := exec.CommandContext(ctx, c, "--version").Output(); vErr == nil {
+				if line := strings.TrimSpace(string(out)); line != "" {
+					ver = line
+				}
+			}
+			cancel()
+			return c, ver, nil
 		}
 	}
-	if p, err := exec.LookPath("chromium"); err == nil {
-		return p, nil
-	}
-	if p, err := exec.LookPath("google-chrome"); err == nil {
-		return p, nil
-	}
-	return "", fmt.Errorf("no Chromium binary found")
-}
-
-func freePort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	p := l.Addr().(*net.TCPAddr).Port
-	_ = l.Close()
-	return p, nil
+	return "", "", fmt.Errorf("no Chromium/Chrome binary found (set CHROME_BIN)")
 }
 
 func startLocalCDPShim(dataDir string) (*localCDPShim, error) {
-	chromeBin, err := findChromiumBinary()
+	chromeBin, chromeVer, err := findChromiumBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -146,60 +88,97 @@ func startLocalCDPShim(dataDir string) (*localCDPShim, error) {
 		return nil, err
 	}
 	s := &localCDPShim{
-		chromeBin: chromeBin,
-		dataDir:   dataDir,
-		ln:        ln,
-		procs:     make(map[string]*shimBrowser),
+		chromeBin:     chromeBin,
+		chromeVersion: chromeVer,
+		dataDir:       dataDir,
+		ln:            ln,
+		procs:         make(map[string]*shimBrowser),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /json/version", s.handleVersion)
+	mux.HandleFunc("/fingerprint/", s.handleFingerprintRoute)
 	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = s.srv.Serve(ln) }()
 	return s, nil
 }
 
-func (s *localCDPShim) ensureSeed(seed string) (*shimBrowser, error) {
+func waitDevToolsActivePort(profileDir string, timeout time.Duration) (int, error) {
+	portFile := filepath.Join(profileDir, "DevToolsActivePort")
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		b, err := os.ReadFile(portFile)
+		if err == nil {
+			lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+			if len(lines) >= 1 {
+				if p, pErr := strconv.Atoi(strings.TrimSpace(lines[0])); pErr == nil && p > 0 {
+					return p, nil
+				}
+			}
+		}
+		time.Sleep(80 * time.Millisecond)
+	}
+	return 0, fmt.Errorf("timed out waiting for DevToolsActivePort in %s", profileDir)
+}
+
+func (s *localCDPShim) ensureSeed(ctx context.Context, seed string) (*shimBrowser, error) {
+	if !safeSeedRe.MatchString(seed) {
+		return nil, fmt.Errorf("invalid fingerprint seed %q", seed)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if b, ok := s.procs[seed]; ok {
 		return b, nil
 	}
-	port, err := freePort()
-	if err != nil {
-		return nil, err
-	}
 	profileDir := filepath.Join(s.dataDir, "profile-"+seed)
 	if err := os.MkdirAll(profileDir, 0o700); err != nil {
 		return nil, err
 	}
+	_ = os.Remove(filepath.Join(profileDir, "DevToolsActivePort"))
+
 	cmd := exec.Command(s.chromeBin,
 		"--headless=new",
+		"--no-sandbox",
 		"--disable-gpu",
+		"--disable-dev-shm-usage",
 		"--no-first-run",
 		"--no-default-browser-check",
 		"--disable-background-networking",
 		"--user-data-dir="+profileDir,
-		fmt.Sprintf("--remote-debugging-port=%d", port),
+		"--remote-debugging-port=0",
 		"about:blank",
 	)
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	deadline := time.Now().Add(15 * time.Second)
+
+	port, err := waitDevToolsActivePort(profileDir, 15*time.Second)
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, err
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/json/version", port))
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				b := &shimBrowser{cmd: cmd, cdpPort: port}
-				s.procs[seed] = b
-				return b, nil
+		req, rErr := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/json/version", port), nil)
+		if rErr == nil {
+			resp, dErr := cdpHTTPClient.Do(req)
+			if dErr == nil {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					b := &shimBrowser{cmd: cmd, cdpPort: port}
+					s.procs[seed] = b
+					return b, nil
+				}
 			}
 		}
-		time.Sleep(150 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	_ = cmd.Process.Kill()
-	return nil, fmt.Errorf("chromium CDP timeout on port %d", port)
+	_ = cmd.Wait()
+	return nil, fmt.Errorf("chromium CDP /json/version timeout on port %d", port)
 }
 
 func (s *localCDPShim) handleVersion(w http.ResponseWriter, r *http.Request) {
@@ -207,151 +186,126 @@ func (s *localCDPShim) handleVersion(w http.ResponseWriter, r *http.Request) {
 	if seed == "" {
 		seed = "anon"
 	}
-	b, err := s.ensureSeed(seed)
+	if !safeSeedRe.MatchString(seed) {
+		http.Error(w, "invalid fingerprint seed", http.StatusBadRequest)
+		return
+	}
+	b, err := s.ensureSeed(r.Context(), seed)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/json/version", b.cdpPort))
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/json/version", b.cdpPort), nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp, err := cdpHTTPClient.Do(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	var meta map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if origWS, ok := meta["webSocketDebuggerUrl"].(string); ok {
+		if u, pErr := url.Parse(origWS); pErr == nil {
+			meta["webSocketDebuggerUrl"] = fmt.Sprintf("ws://%s/fingerprint/%s%s", s.ln.Addr().String(), seed, u.RequestURI())
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = io.Copy(w, resp.Body)
+	_ = json.NewEncoder(w).Encode(meta)
 }
 
 func (s *localCDPShim) VersionURL(fp string) string {
 	return fmt.Sprintf("http://%s/json/version?fingerprint=%s", s.ln.Addr().String(), fp)
 }
 
-func (s *localCDPShim) MeasureRSSMB() (float64, int) {
+func (s *localCDPShim) MeasureMemoryMB() (pssMB float64, rssMB float64, procs int, err error) {
 	s.mu.Lock()
-	var rootPIDs []int
+	var pids []int
 	for _, b := range s.procs {
 		if b.cmd.Process != nil {
-			rootPIDs = append(rootPIDs, b.cmd.Process.Pid)
+			pids = append(pids, b.cmd.Process.Pid)
 		}
 	}
 	s.mu.Unlock()
-	if len(rootPIDs) == 0 {
-		return 0, 0
+	if len(pids) == 0 {
+		return 0, 0, 0, fmt.Errorf("no active shim browser process")
 	}
-	rootID := rootPIDs[0]
-	ps := fmt.Sprintf(`
-$all = Get-CimInstance Win32_Process
-$ids = [System.Collections.Generic.HashSet[uint32]]::new()
-[void]$ids.Add(%d)
-$added = $true
-while ($added) {
-  $added = $false
-  foreach ($p in $all) {
-    if ($ids.Contains($p.ParentProcessId) -and -not $ids.Contains($p.ProcessId)) {
-      [void]$ids.Add($p.ProcessId)
-      $added = $true
-    }
-  }
-}
-$matched = $all | Where-Object { $ids.Contains($_.ProcessId) }
-$sum = ($matched | Measure-Object -Property WorkingSetSize -Sum).Sum
-if (-not $sum) { $sum = 0 }
-Write-Output "$($matched.Count),$sum"
-`, rootID)
-	out, err := exec.Command("powershell", "-NoProfile", "-Command", ps).Output()
-	if err != nil {
-		return 0, 0
+	var sumPSS, sumRSS float64
+	var sumProcs int
+	for _, pid := range pids {
+		p, r, c := measureProcessTreeMB(pid)
+		sumPSS += p
+		sumRSS += r
+		sumProcs += c
 	}
-	parts := strings.Split(strings.TrimSpace(string(out)), ",")
-	if len(parts) != 2 {
-		return 0, 0
+	if sumProcs == 0 {
+		return 0, 0, 0, fmt.Errorf("process tree memory returned 0 processes")
 	}
-	cnt, _ := strconv.Atoi(parts[0])
-	sum, _ := strconv.ParseInt(parts[1], 10, 64)
-	return float64(sum) / (1024 * 1024), cnt
+	return sumPSS, sumRSS, sumProcs, nil
 }
 
-func gracefulCDPBrowserClose(cdpPort int) {
-	wsURL, err := fetchWSDebuggerURL(fmt.Sprintf("http://127.0.0.1:%d/json/version", cdpPort))
-	if err != nil {
+func (s *localCDPShim) closeSeed(seed string, graceful bool) {
+	s.mu.Lock()
+	b, ok := s.procs[seed]
+	if ok {
+		delete(s.procs, seed)
+	}
+	s.mu.Unlock()
+	if !ok || b.cmd.Process == nil {
 		return
 	}
-	u, err := url.Parse(wsURL)
-	if err != nil {
+	if !graceful {
+		_ = b.cmd.Process.Kill()
+		_ = b.cmd.Wait()
 		return
 	}
-	conn, err := net.DialTimeout("tcp", u.Host, 2*time.Second)
-	if err != nil {
-		return
+	if !sendBrowserGracefulStop(b.cmd) {
+		gracefulCDPBrowserClose(context.Background(), b.cdpPort)
 	}
-	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-
-	var keyBytes [16]byte
-	_, _ = rand.Read(keyBytes[:])
-	wsKey := base64.StdEncoding.EncodeToString(keyBytes[:])
-	req := fmt.Sprintf("GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", u.RequestURI(), u.Host, wsKey)
-	if _, err := conn.Write([]byte(req)); err != nil {
-		return
+	done := make(chan struct{})
+	go func() {
+		_ = b.cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = b.cmd.Process.Kill()
+		<-done
 	}
-	br := bufio.NewReader(conn)
-	for {
-		line, err := br.ReadString('\n')
-		if err != nil || line == "\r\n" {
-			break
-		}
-	}
-	// Send masked text frame: {"id":1,"method":"Browser.close"}
-	payload := []byte(`{"id":1,"method":"Browser.close"}`)
-	var mask [4]byte
-	_, _ = rand.Read(mask[:])
-	frame := make([]byte, 0, 6+len(payload))
-	frame = append(frame, 0x81, byte(0x80|len(payload)))
-	frame = append(frame, mask[:]...)
-	for i, b := range payload {
-		frame = append(frame, b^mask[i%4])
-	}
-	_, _ = conn.Write(frame)
-	time.Sleep(250 * time.Millisecond)
 }
 
 func (s *localCDPShim) Close() error {
 	_ = s.srv.Shutdown(context.Background())
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, b := range s.procs {
-		gracefulCDPBrowserClose(b.cdpPort)
-		if b.cmd.Process != nil {
-			done := make(chan struct{})
-			go func(c *exec.Cmd) {
-				_ = c.Wait()
-				close(done)
-			}(b.cmd)
-			select {
-			case <-done:
-			case <-time.After(2 * time.Second):
-				_ = b.cmd.Process.Kill()
-			}
-		}
+	seeds := make([]string, 0, len(s.procs))
+	for k := range s.procs {
+		seeds = append(seeds, k)
 	}
-	s.procs = map[string]*shimBrowser{}
+	s.mu.Unlock()
+	for _, k := range seeds {
+		s.closeSeed(k, true)
+	}
 	return nil
 }
 
-func fetchWSDebuggerURL(versionURL string) (string, error) {
-	resp, err := http.Get(versionURL)
-	if err != nil {
-		return "", err
+func (s *localCDPShim) ForceKill() error {
+	_ = s.srv.Shutdown(context.Background())
+	s.mu.Lock()
+	seeds := make([]string, 0, len(s.procs))
+	for k := range s.procs {
+		seeds = append(seeds, k)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	var data struct {
-		WS string `json:"webSocketDebuggerUrl"`
+	s.mu.Unlock()
+	for _, k := range seeds {
+		s.closeSeed(k, false)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return "", err
-	}
-	if data.WS == "" {
-		return "", fmt.Errorf("empty webSocketDebuggerUrl from %s", versionURL)
-	}
-	return data.WS, nil
+	return nil
 }
