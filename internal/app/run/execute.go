@@ -199,7 +199,9 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 
 	s.revokeToken(token)
 
-	if err := s.finalizeWithRetry(ctx, c.RunID, out); err != nil {
+	finCtx, finCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer finCancel()
+	if err := s.finalizeWithRetry(finCtx, c.RunID, out); err != nil {
 		return out, err
 	}
 	return out, nil

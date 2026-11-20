@@ -59,6 +59,7 @@ type Reader interface {
 	FindPendingApproval(ctx context.Context, agentID domain.ID, toolName, inputHash string) (ApprovalRecord, bool, error)
 	GetQuotaWindowTokens(ctx context.Context, engine domain.EngineName, window string, windowStartMs int64) (tokens int64, runs int, err error)
 	CountQuotaLedgerRows(ctx context.Context, engine domain.EngineName, window string) (int, error)
+	CountFutureQuotaLedgerRows(ctx context.Context, afterMs int64) (int, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -105,6 +106,10 @@ type Tx interface {
 	ConsumeAllowedApproval(ctx context.Context, agentID domain.ID, toolName, inputHash string, nowMs int64) (bool, error)
 	ListExpiredPendingApprovals(ctx context.Context, nowMs int64) ([]ApprovalRecord, error)
 	ResolveInboxByRef(ctx context.Context, refKind, refID string, resolvedAt int64) error
+	PromoteDueWakeups(ctx context.Context, nowMs int64) (int, error)
+	ReconcileTeamRunning(ctx context.Context) error
+	PruneTerminalWakeupsBefore(ctx context.Context, cutoffMs int64, limit int) (int, error)
+	SetTeamRunningRaw(ctx context.Context, teamID domain.ID, running int) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 
