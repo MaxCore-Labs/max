@@ -25,6 +25,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "version", "--version", "-v":
 		_, _ = fmt.Fprintf(stdout, "max %s\n", Version)
 		return 0
+	case "serve":
+		return runServe(stdout, stderr)
+	case "doctor":
+		return runDoctor(stdout, stderr)
+	case "migrate":
+		return runMigrate(stdout, stderr)
+	case "healthcheck":
+		return runHealthcheck(stdout, stderr)
+	case "engine":
+		return runEngineCmd(args[1:], stdout, stderr)
 	case "admin":
 		return runAdmin(args[1:], os.Stdin, stdout, stderr)
 	case "mcp":

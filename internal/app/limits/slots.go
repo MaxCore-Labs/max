@@ -12,11 +12,12 @@ const minFreeMemoryBytes uint64 = 1024 * 1024 * 1024 // 1 GiB
 
 // Slots tracks per-engine concurrent CLI process limits, interactive reservation, and low-RAM guard.
 type Slots struct {
-	mu      sync.Mutex
-	caps    map[domain.EngineName]int
-	used    map[domain.EngineName]int
-	enabled map[domain.EngineName]bool
-	freeMem func() uint64
+	mu          sync.Mutex
+	caps        map[domain.EngineName]int
+	used        map[domain.EngineName]int
+	enabled     map[domain.EngineName]bool
+	unavailable map[domain.EngineName]bool
+	freeMem     func() uint64
 }
 
 // NewSlots constructs a Slots limiter. If freeMem is nil, the low-memory guard assumes >= 1 GiB free.
@@ -30,11 +31,19 @@ func NewSlots(caps map[domain.EngineName]int, freeMem func() uint64) *Slots {
 		}
 	}
 	return &Slots{
-		caps:    cp,
-		used:    make(map[domain.EngineName]int, len(caps)),
-		enabled: en,
-		freeMem: freeMem,
+		caps:        cp,
+		used:        make(map[domain.EngineName]int, len(caps)),
+		enabled:     en,
+		unavailable: make(map[domain.EngineName]bool, len(caps)),
+		freeMem:     freeMem,
 	}
+}
+
+// SetHealthAvailable toggles runtime health/binary availability of e without altering owner enabled settings.
+func (s *Slots) SetHealthAvailable(e domain.EngineName, available bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.unavailable[e] = !available
 }
 
 // Free returns remaining process slots per engine (0 for all engines if free RAM < 1 GiB or engine disabled).
@@ -46,7 +55,7 @@ func (s *Slots) Free() map[domain.EngineName]int {
 
 	out := make(map[domain.EngineName]int, len(s.caps))
 	for eng, total := range s.caps {
-		if lowRAM || !s.enabled[eng] {
+		if lowRAM || !s.enabled[eng] || s.unavailable[eng] {
 			out[eng] = 0
 			continue
 		}
@@ -72,7 +81,7 @@ func (s *Slots) AcquirePriority(e domain.EngineName, p domain.Priority) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !s.enabled[e] {
+	if !s.enabled[e] || s.unavailable[e] {
 		return false
 	}
 	total := s.caps[e]

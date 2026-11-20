@@ -225,6 +225,26 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 			return err
 		}
 
+		if convOK && conv.ThreadID != nil && *conv.ThreadID != "" && o.Summary != "" {
+			if _, thOK, _ := tx.GetThread(ctx, *conv.ThreadID); thOK {
+				rID := runID
+				if err := tx.InsertMessage(ctx, app.MessageRecord{
+					ID:              s.deps.IDs.New(),
+					ThreadID:        *conv.ThreadID,
+					Role:            "assistant",
+					Content:         o.Summary,
+					AttachmentsJSON: "[]",
+					RunID:           &rID,
+					CreatedAt:       nowMs,
+				}); err != nil {
+					return err
+				}
+				if err := tx.TouchThread(ctx, *conv.ThreadID, nowMs); err != nil {
+					return err
+				}
+			}
+		}
+
 		if err := tx.SetAgentActiveRun(ctx, runRec.AgentID, nil); err != nil {
 			return err
 		}

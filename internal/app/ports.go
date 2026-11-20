@@ -76,6 +76,7 @@ type Reader interface {
 	ListUsagePage(ctx context.Context, sinceDay string, limit int, offset int) ([]DailyUsageRecord, error)
 	CountQueuedByPriority(ctx context.Context) (map[int]int, error)
 	ListAuditLogs(ctx context.Context, limit int) ([]AuditLogRecord, error)
+	GetEngineBinary(ctx context.Context, engine domain.EngineName) (EngineBinaryRecord, bool, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -137,6 +138,7 @@ type Tx interface {
 	MarkInboxItemRead(ctx context.Context, id domain.ID, readAt int64) error
 	ResolveInboxItem(ctx context.Context, id domain.ID, resolvedAt int64) error
 	AppendAuditLog(ctx context.Context, rec AuditLogRecord) error
+	UpsertEngineBinary(ctx context.Context, rec EngineBinaryRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 
