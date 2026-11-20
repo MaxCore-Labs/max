@@ -15,6 +15,8 @@ import (
 type Deps struct {
 	Store  app.Store
 	Chat   *chat.Service
+	Bus    *platform.Bus
+	Hub    *Hub
 	Config platform.Config
 	Clock  app.Clock
 	IDs    app.IDGen
@@ -35,6 +37,12 @@ func New(deps Deps) (http.Handler, error) {
 	}
 	if deps.IDs == nil {
 		deps.IDs = app.UUIDv7Gen{}
+	}
+	if deps.Bus == nil {
+		deps.Bus = platform.NewBus()
+	}
+	if deps.Hub == nil {
+		deps.Hub = NewHub(deps.Bus, deps.Clock)
 	}
 
 	if deps.Config.AdminPassword != "" {
@@ -63,7 +71,12 @@ func New(deps Deps) (http.Handler, error) {
 	apiMux := http.NewServeMux()
 	gen.HandlerFromMux(strict, apiMux)
 
-	var h http.Handler = apiMux
+	rootMux := http.NewServeMux()
+	rootMux.HandleFunc("GET /api/v1/events", srv.handleStreamEvents)
+	rootMux.HandleFunc("GET /api/v1/runs/{runId}/stream", srv.handleStreamRun)
+	rootMux.Handle("/", apiMux)
+
+	var h http.Handler = rootMux
 	h = RequireSession(deps.Store, deps.Clock)(h)
 	h = RateLimitLogin(deps.Clock)(h)
 	h = CheckOrigin(pubOrigin)(h)
