@@ -199,7 +199,7 @@ func (s *Service) RequestReview(ctx context.Context, c Caller) Result {
 	if taskIDPtr == nil {
 		return Result{Text: "request_review requires an active task context", IsError: true}
 	}
-	if err := s.ensureCoord().SetStatus(ctx, *taskIDPtr, domain.TaskInReview, nil, coord.Actor{Kind: "agent", ID: c.AgentID}); err != nil {
+	if err := s.ensureCoord().SubmitForReview(ctx, *taskIDPtr, c.AgentID); err != nil {
 		return Result{Text: fmt.Sprintf("request_review failed: %v", err), IsError: true}
 	}
 	return Result{Text: fmt.Sprintf("Task %s submitted for review. End your turn.", *taskIDPtr)}

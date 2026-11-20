@@ -259,3 +259,17 @@ func (r *sqliteReader) GetConversationByTask(ctx context.Context, agentID, taskI
 	}
 	return c, true, nil
 }
+
+func (r *sqliteReader) GetMaxWakeupHopsForTask(ctx context.Context, agentID, taskID domain.ID) (int, error) {
+	var hops int
+	err := r.q.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(w.hops), 0)
+		FROM wakeups w
+		JOIN conversations c ON c.id = w.conversation_id
+		WHERE w.agent_id = ? AND c.task_id = ?`, agentID, taskID,
+	).Scan(&hops)
+	if err != nil {
+		return 0, fmt.Errorf("get max wakeup hops for task: %w", err)
+	}
+	return hops, nil
+}
