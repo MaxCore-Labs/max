@@ -136,10 +136,11 @@ func (v Verdict) String() string {
 	}
 }
 
-// Decision pairs a Verdict with a human-readable explanation.
+// Decision pairs a Verdict with a human-readable explanation and optional matched GrantID.
 type Decision struct {
 	Verdict Verdict
 	Reason  string
+	GrantID ID
 }
 
 // RootOrigin tracks the trust origin of the root task in a task tree.

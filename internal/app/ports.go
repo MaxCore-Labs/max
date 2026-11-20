@@ -109,6 +109,8 @@ type Reader interface {
 	ListThreadMessagesAsc(ctx context.Context, threadID domain.ID, afterMsgID *domain.ID, limit int) ([]MessageRecord, error)
 	GetProposal(ctx context.Context, id domain.ID) (ProposalRecord, bool, error)
 	ListProposals(ctx context.Context, status string, limit int) ([]ProposalRecord, error)
+	GetGrant(ctx context.Context, id domain.ID) (GrantRecord, bool, error)
+	ListGrantsByAgent(ctx context.Context, agentID domain.ID) ([]GrantRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -191,6 +193,9 @@ type Tx interface {
 	SetThreadLearnedThrough(ctx context.Context, threadID, msgID domain.ID) error
 	InsertProposal(ctx context.Context, p ProposalRecord) error
 	UpdateProposalStatus(ctx context.Context, id domain.ID, status string, decidedAt int64) error
+	InsertGrant(ctx context.Context, g GrantRecord) error
+	RevokeGrant(ctx context.Context, id domain.ID, revokedAt int64) error
+	IncrementGrantUse(ctx context.Context, id domain.ID, day string) (allowed bool, err error)
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.

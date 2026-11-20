@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -23,12 +24,15 @@ type ToolCall struct {
 	SearchRoot string
 	Connection string
 	InputHash  string
+	Input      json.RawMessage
 }
 
 // Grant represents an owner-issued standing permission for an agent tool call.
 type Grant struct {
+	ID                 ID
 	Connection         string
 	Tool               string
+	Constraints        Constraints
 	AllowedRootOrigins []RootOrigin
 	ExpiresAt          *time.Time
 	Revoked            bool
@@ -103,8 +107,10 @@ func Decide(a AgentPolicy, c ToolCall, origin RootOrigin, grants []Grant, now ti
 		if a.Autonomy == AutonomySuggest {
 			return Decision{Verdict: Deny, Reason: "suggest-mode agent cannot execute external actions"}
 		}
-		if hasMatchingGrant(grants, c.Connection, c.Name, origin, now) {
-			return Decision{Verdict: Allow}
+		if gid, ok, mismatch := findMatchingGrant(grants, c.Connection, c.Name, c.Input, origin, now); ok {
+			return Decision{Verdict: Allow, GrantID: gid}
+		} else if mismatch != "" {
+			return Decision{Verdict: Ask, Reason: "grant constraint mismatch: " + mismatch}
 		}
 		return Decision{Verdict: Ask, Reason: "external action requires owner approval or active grant"}
 	case ToolClassX:
@@ -114,8 +120,8 @@ func Decide(a AgentPolicy, c ToolCall, origin RootOrigin, grants []Grant, now ti
 		if !a.Shell {
 			return Decision{Verdict: Deny, Reason: "shell capability is disabled for this agent"}
 		}
-		if hasMatchingGrant(grants, c.Connection, c.Name, origin, now) {
-			return Decision{Verdict: Allow}
+		if gid, ok, _ := findMatchingGrant(grants, c.Connection, c.Name, c.Input, origin, now); ok {
+			return Decision{Verdict: Allow, GrantID: gid}
 		}
 		return Decision{Verdict: Ask, Reason: "shell execution requires owner approval"}
 	default:
@@ -184,8 +190,10 @@ func decideBrowser(a AgentPolicy, c ToolCall, origin RootOrigin, grants []Grant,
 		if conn == "" {
 			conn = "browser"
 		}
-		if hasMatchingGrant(grants, conn, c.Name, origin, now) {
-			return Decision{Verdict: Allow}
+		if gid, ok, mismatch := findMatchingGrant(grants, conn, c.Name, c.Input, origin, now); ok {
+			return Decision{Verdict: Allow, GrantID: gid}
+		} else if mismatch != "" {
+			return Decision{Verdict: Ask, Reason: "grant constraint mismatch: " + mismatch}
 		}
 		return Decision{Verdict: Ask, Reason: "owner browser profile requires approval or matching grant"}
 	default:
@@ -193,7 +201,8 @@ func decideBrowser(a AgentPolicy, c ToolCall, origin RootOrigin, grants []Grant,
 	}
 }
 
-func hasMatchingGrant(grants []Grant, conn, tool string, origin RootOrigin, now time.Time) bool {
+func findMatchingGrant(grants []Grant, conn, tool string, input json.RawMessage, origin RootOrigin, now time.Time) (ID, bool, string) {
+	var firstMismatch string
 	for _, g := range grants {
 		if g.Revoked {
 			continue
@@ -210,9 +219,15 @@ func hasMatchingGrant(grants []Grant, conn, tool string, origin RootOrigin, now 
 		if !originAllowed(g.AllowedRootOrigins, origin) {
 			continue
 		}
-		return true
+		ok, reason := g.Constraints.Match(input)
+		if ok {
+			return g.ID, true, ""
+		}
+		if firstMismatch == "" {
+			firstMismatch = reason
+		}
 	}
-	return false
+	return "", false, firstMismatch
 }
 
 func originAllowed(allowed []RootOrigin, origin RootOrigin) bool {
