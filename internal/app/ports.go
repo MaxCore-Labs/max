@@ -60,6 +60,10 @@ type Reader interface {
 	GetQuotaWindowTokens(ctx context.Context, engine domain.EngineName, window string, windowStartMs int64) (tokens int64, runs int, err error)
 	CountQuotaLedgerRows(ctx context.Context, engine domain.EngineName, window string) (int, error)
 	CountFutureQuotaLedgerRows(ctx context.Context, afterMs int64) (int, error)
+	GetOwnerUser(ctx context.Context) (UserRecord, bool, error)
+	GetUserByID(ctx context.Context, id domain.ID) (UserRecord, bool, error)
+	GetAuthSession(ctx context.Context, tokenHash string) (AuthSessionRecord, bool, error)
+	ListAllAuthSessionHashes(ctx context.Context) ([]string, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -110,6 +114,9 @@ type Tx interface {
 	ReconcileTeamRunning(ctx context.Context) error
 	PruneTerminalWakeupsBefore(ctx context.Context, cutoffMs int64, limit int) (int, error)
 	SetTeamRunningRaw(ctx context.Context, teamID domain.ID, running int) error
+	UpsertOwnerUser(ctx context.Context, u UserRecord) error
+	InsertAuthSession(ctx context.Context, s AuthSessionRecord) error
+	DeleteAuthSession(ctx context.Context, tokenHash string) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 

@@ -25,6 +25,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "version", "--version", "-v":
 		_, _ = fmt.Fprintf(stdout, "max %s\n", Version)
 		return 0
+	case "admin":
+		return runAdmin(args[1:], os.Stdin, stdout, stderr)
 	case "mcp":
 		sock := os.Getenv("MAX_MCP_SOCK")
 		if sock == "" {

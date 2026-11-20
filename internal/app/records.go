@@ -205,6 +205,24 @@ type ApprovalRecord struct {
 	DecidedAt      *int64
 }
 
+// UserRecord represents a row in the users table.
+type UserRecord struct {
+	ID           domain.ID
+	Username     string
+	PasswordHash string
+	TOTPEnabled  bool
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
+// AuthSessionRecord represents a row in the auth_sessions table.
+type AuthSessionRecord struct {
+	TokenHash string
+	UserID    domain.ID
+	ExpiresAt int64
+	CreatedAt int64
+}
+
 // OutboxRecord represents a row in the outbox table.
 type OutboxRecord struct {
 	ID            int64
