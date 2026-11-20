@@ -53,6 +53,8 @@ type Reader interface {
 	ListInboxItems(ctx context.Context, limit int) ([]InboxItemRecord, error)
 	ListOutboxPending(ctx context.Context, limit int) ([]OutboxRecord, error)
 	CountQuestionsByRun(ctx context.Context, runID domain.ID) (int, error)
+	GetApproval(ctx context.Context, id domain.ID) (ApprovalRecord, bool, error)
+	FindPendingApproval(ctx context.Context, agentID domain.ID, toolName, inputHash string) (ApprovalRecord, bool, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -88,6 +90,11 @@ type Tx interface {
 	UpsertQuotaLimit(ctx context.Context, engine domain.EngineName, limitedUntil, nowMs int64) error
 	InsertInboxItem(ctx context.Context, item InboxItemRecord) error
 	InsertOutbox(ctx context.Context, rec OutboxRecord) error
+	InsertApproval(ctx context.Context, ap ApprovalRecord) error
+	UpdateApprovalDecision(ctx context.Context, id domain.ID, status string, decisionKey *string, decidedAt *int64) error
+	ConsumeAllowedApproval(ctx context.Context, agentID domain.ID, toolName, inputHash string, nowMs int64) (bool, error)
+	ListExpiredPendingApprovals(ctx context.Context, nowMs int64) ([]ApprovalRecord, error)
+	ResolveInboxByRef(ctx context.Context, refKind, refID string, resolvedAt int64) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 

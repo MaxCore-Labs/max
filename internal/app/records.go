@@ -186,6 +186,25 @@ type CandidateAgent struct {
 	TeamMaxRun    int
 }
 
+// ApprovalRecord represents a row in the approvals table.
+type ApprovalRecord struct {
+	ID             domain.ID
+	RunID          domain.ID
+	AgentID        domain.ID
+	ConversationID domain.ID
+	ToolName       string
+	Input          string
+	InputHash      string
+	Preview        string
+	Reason         string
+	ByMax          bool
+	Status         string
+	DecisionKey    *string
+	RequestedAt    int64
+	ExpiresAt      int64
+	DecidedAt      *int64
+}
+
 // OutboxRecord represents a row in the outbox table.
 type OutboxRecord struct {
 	ID            int64
