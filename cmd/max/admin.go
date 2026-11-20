@@ -17,14 +17,51 @@ import (
 )
 
 func runAdmin(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "set-password" {
-		_, _ = fmt.Fprintln(stderr, "usage: max admin set-password [--password <pw>]")
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(stderr, "usage: max admin <set-password|backup-db> [args]")
 		return 2
 	}
+	switch args[0] {
+	case "set-password":
+		return runAdminSetPassword(args[1:], stdin, stdout, stderr)
+	case "backup-db":
+		return runAdminBackupDB(args[1:], stdout, stderr)
+	default:
+		_, _ = fmt.Fprintln(stderr, "usage: max admin <set-password|backup-db> [args]")
+		return 2
+	}
+}
+
+func runAdminBackupDB(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
+		_, _ = fmt.Fprintln(stderr, "usage: max admin backup-db <dest-sqlite-file>")
+		return 2
+	}
+	cfg, err := platform.Load(os.Getenv)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "load config: %v\n", err)
+		return 1
+	}
+	ctx := context.Background()
+	st, err := sqlite.Open(ctx, filepath.Join(cfg.DataDir, "max.sqlite3"))
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "open sqlite: %v\n", err)
+		return 1
+	}
+	defer func() { _ = st.Close() }()
+	if err := st.VacuumInto(ctx, args[0]); err != nil {
+		_, _ = fmt.Fprintf(stderr, "backup-db: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(stdout, "sqlite snapshot written to %s\n", args[0])
+	return 0
+}
+
+func runAdminSetPassword(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("set-password", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	pwFlag := fs.String("password", "", "new owner password (>= 12 chars)")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 

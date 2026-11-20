@@ -1,0 +1,31 @@
+[Unit]
+Description=Max Multi-Agent Assistant Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=max
+Group=max
+WorkingDirectory=/var/lib/max-vault
+EnvironmentFile=-/etc/max/max.env
+Environment=MAX_DATA_DIR=/var/lib/max
+Environment=MAX_VAULT_DIR=/var/lib/max-vault
+Environment=MAX_LISTEN=127.0.0.1:8787
+Environment=HOME=/var/lib/max/agent-home/agy
+ExecStart=/usr/local/bin/max serve
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/max /var/lib/max-vault
+
+[Install]
+WantedBy=multi-user.target

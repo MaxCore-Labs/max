@@ -1,0 +1,30 @@
+services:
+  max:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: max-assistant:local
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /data/run:rw,noexec,nosuid,mode=0700,uid=10001,gid=10001,size=16m
+    ports:
+      - "127.0.0.1:8787:8787"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MAX_DATA_DIR: /data
+      MAX_VAULT_DIR: /vault
+      MAX_LISTEN: 0.0.0.0:8787
+      HOME: /data/agent-home/agy
+    volumes:
+      - ./data:/data
+      - ./vault:/vault
+      - ${AGY_HOST_DIR:-./opt-agy}:/opt/agy/bin:ro

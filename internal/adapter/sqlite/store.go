@@ -110,6 +110,18 @@ func (s *Store) Close() error {
 	return errors.Join(rErr, wErr)
 }
 
+// VacuumInto creates a transactionally consistent online snapshot of the database at destPath.
+func (s *Store) VacuumInto(ctx context.Context, destPath string) error {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o700); err != nil {
+		return fmt.Errorf("mkdir vacuum dir: %w", err)
+	}
+	_ = os.Remove(destPath)
+	if _, err := s.wdb.ExecContext(ctx, `VACUUM INTO ?`, filepath.ToSlash(destPath)); err != nil {
+		return fmt.Errorf("vacuum into %q: %w", destPath, err)
+	}
+	return nil
+}
+
 // Pragmas returns active journal_mode and foreign_keys on the writer connection.
 func (s *Store) Pragmas(ctx context.Context) (journalMode string, foreignKeys int, err error) {
 	if err := s.wdb.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
