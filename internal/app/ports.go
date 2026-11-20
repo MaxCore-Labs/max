@@ -57,6 +57,8 @@ type Reader interface {
 	CountQuestionsByRun(ctx context.Context, runID domain.ID) (int, error)
 	GetApproval(ctx context.Context, id domain.ID) (ApprovalRecord, bool, error)
 	FindPendingApproval(ctx context.Context, agentID domain.ID, toolName, inputHash string) (ApprovalRecord, bool, error)
+	GetQuotaWindowTokens(ctx context.Context, engine domain.EngineName, window string, windowStartMs int64) (tokens int64, runs int, err error)
+	CountQuotaLedgerRows(ctx context.Context, engine domain.EngineName, window string) (int, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -93,6 +95,9 @@ type Tx interface {
 	FinishWakeupsForRun(ctx context.Context, runID domain.ID, status string) error
 	RequeueWakeupsForRun(ctx context.Context, runID domain.ID, refundAttempt bool) error
 	UpsertQuotaLimit(ctx context.Context, engine domain.EngineName, limitedUntil, nowMs int64) error
+	AddQuotaLedgerUsage(ctx context.Context, engine domain.EngineName, window string, windowStartMs, tokens int64) error
+	AddDailyUsage(ctx context.Context, day string, agentID, teamID domain.ID, engine domain.EngineName, tokens int64) error
+	SaveLearnedQuotaState(ctx context.Context, qs QuotaStateRecord) error
 	InsertInboxItem(ctx context.Context, item InboxItemRecord) error
 	InsertOutbox(ctx context.Context, rec OutboxRecord) error
 	InsertApproval(ctx context.Context, ap ApprovalRecord) error
