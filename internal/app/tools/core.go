@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"max/internal/app"
+	"max/internal/app/actor"
+	"max/internal/app/coord"
 	"max/internal/domain"
 	"max/internal/platform"
 )
@@ -23,6 +26,7 @@ const (
 type Caller struct {
 	RunID, AgentID, ConversationID domain.ID
 	TaskID                         *domain.ID
+	Hops                           int
 	Policy                         domain.AgentPolicy
 	Origin                         domain.RootOrigin
 }
@@ -35,10 +39,14 @@ type Result struct {
 
 // Service implements Max's core MCP tools independent of transport protocol.
 type Service struct {
-	store    app.Store
-	vaultDir string
-	clock    app.Clock
-	ids      app.IDGen
+	store     app.Store
+	vaultDir  string
+	clock     app.Clock
+	ids       app.IDGen
+	coord     *coord.Service
+	actors    *actor.Service
+	mu        sync.Mutex
+	runCounts map[domain.ID]domain.RunCounters
 }
 
 // NewService constructs a core tools Service.
@@ -50,11 +58,19 @@ func NewService(store app.Store, vaultDir string, clock app.Clock, ids app.IDGen
 		ids = app.UUIDv7Gen{}
 	}
 	return &Service{
-		store:    store,
-		vaultDir: vaultDir,
-		clock:    clock,
-		ids:      ids,
+		store:     store,
+		vaultDir:  vaultDir,
+		clock:     clock,
+		ids:       ids,
+		runCounts: make(map[domain.ID]domain.RunCounters),
 	}
+}
+
+// WithCoord attaches multi-agent task coordination and mailbox services to tools.Service.
+func (s *Service) WithCoord(coordSvc *coord.Service, actors *actor.Service) *Service {
+	s.coord = coordSvc
+	s.actors = actors
+	return s
 }
 
 func (s *Service) checkPolicy(c Caller, name string, class domain.ToolClass, rel string) (bool, Result) {
