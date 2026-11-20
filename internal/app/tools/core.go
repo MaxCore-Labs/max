@@ -45,6 +45,7 @@ type Service struct {
 	ids       app.IDGen
 	coord     *coord.Service
 	actors    *actor.Service
+	memory    app.EpisodicMemory
 	mu        sync.Mutex
 	runCounts map[domain.ID]domain.RunCounters
 }
@@ -70,6 +71,12 @@ func NewService(store app.Store, vaultDir string, clock app.Clock, ids app.IDGen
 func (s *Service) WithCoord(coordSvc *coord.Service, actors *actor.Service) *Service {
 	s.coord = coordSvc
 	s.actors = actors
+	return s
+}
+
+// WithMemory attaches an EpisodicMemory port to tools.Service.
+func (s *Service) WithMemory(mem app.EpisodicMemory) *Service {
+	s.memory = mem
 	return s
 }
 

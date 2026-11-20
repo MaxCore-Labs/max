@@ -184,6 +184,7 @@ type Tx interface {
 	ExpirePendingApprovalsByTasks(ctx context.Context, taskIDs []domain.ID, nowMs int64) (int, error)
 	UpsertRoutineState(ctx context.Context, st RoutineStateRecord) error
 	SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error
+	MarkOutboxSent(ctx context.Context, id int64, sentAt int64) error
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
@@ -266,4 +267,27 @@ type Engine interface {
 	Caps() EngineCaps
 	Run(ctx context.Context, spec RunSpec, perm PermissionFunc) (<-chan EngineEvent, error)
 	Health(ctx context.Context) EngineHealth
+}
+
+// MemoryHit represents a single episodic recall item returned by EpisodicMemory.Search.
+type MemoryHit struct {
+	ID             domain.ID
+	AuthorAgentID  domain.ID
+	ConversationID domain.ID
+	Scope          string
+	Content        string
+	Score          float64
+	CreatedAt      int64
+}
+
+// EpisodicMemory stores and searches agent/team episodic memories (Spec 8.9.4 & S2).
+type EpisodicMemory interface {
+	Search(ctx context.Context, agentID domain.ID, query string, limit int) ([]MemoryHit, error)
+	Remember(ctx context.Context, agentID domain.ID, content string, concepts []string) error
+	Healthy() bool
+}
+
+// TxMemoryWriter is an optional extension allowing SQLite-backed EpisodicMemory to write inside Finalize's transaction.
+type TxMemoryWriter interface {
+	RememberInTx(ctx context.Context, tx Tx, agentID, convID domain.ID, content string) error
 }

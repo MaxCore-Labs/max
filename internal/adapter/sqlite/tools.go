@@ -66,3 +66,11 @@ func (t *sqliteTx) InsertOutbox(ctx context.Context, rec app.OutboxRecord) error
 	}
 	return nil
 }
+
+func (t *sqliteTx) MarkOutboxSent(ctx context.Context, id int64, sentAt int64) error {
+	_, err := t.q.ExecContext(ctx, `UPDATE outbox SET sent_at = ? WHERE id = ?`, sentAt, id)
+	if err != nil {
+		return fmt.Errorf("mark outbox %d sent: %w", id, err)
+	}
+	return nil
+}
