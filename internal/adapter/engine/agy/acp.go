@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,11 @@ import (
 )
 
 func (d *Driver) runACP(ctx context.Context, spec app.RunSpec, perm app.PermissionFunc) (<-chan app.EngineEvent, error) {
+	if spec.Cwd != "" {
+		if absCwd, err := filepath.Abs(spec.Cwd); err == nil {
+			spec.Cwd = absCwd
+		}
+	}
 	args := []string{"acp", "--include-default-customizations=false"}
 	for _, add := range spec.AddDirs {
 		if strings.TrimSpace(add) != "" {

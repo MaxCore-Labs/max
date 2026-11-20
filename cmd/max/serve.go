@@ -83,6 +83,16 @@ func runServe(stdout, stderr io.Writer) int {
 
 func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr io.Writer) int {
 	cfg := opts.Config
+	if cfg.DataDir != "" {
+		if absData, err := filepath.Abs(cfg.DataDir); err == nil {
+			cfg.DataDir = absData
+		}
+	}
+	if cfg.VaultDir != "" {
+		if absVault, err := filepath.Abs(cfg.VaultDir); err == nil {
+			cfg.VaultDir = absVault
+		}
+	}
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:8787"
 	}

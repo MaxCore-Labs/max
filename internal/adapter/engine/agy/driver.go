@@ -55,6 +55,11 @@ func New(bin, home string, mode Mode, log *slog.Logger) *Driver {
 			bin = abs
 		}
 	}
+	if home != "" {
+		if absHome, err := filepath.Abs(home); err == nil {
+			home = absHome
+		}
+	}
 	self, _ := os.Executable()
 	if self == "" {
 		self = "max"
@@ -74,6 +79,11 @@ func New(bin, home string, mode Mode, log *slog.Logger) *Driver {
 func (d *Driver) WithMaxBin(maxBin, mcpSock string) *Driver {
 	if maxBin != "" {
 		d.maxBin = maxBin
+	}
+	if mcpSock != "" {
+		if absSock, err := filepath.Abs(mcpSock); err == nil {
+			mcpSock = absSock
+		}
 	}
 	d.mcpSock = mcpSock
 	return d
