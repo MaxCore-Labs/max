@@ -164,6 +164,9 @@ func (s *Server) Login(ctx context.Context, req gen.LoginRequestObject) (gen.Log
 			ErrorRespJSONResponse: gen.ErrorRespJSONResponse{Error: "invalid credentials"},
 		}, nil
 	}
+	if resp, blocked := s.verifyLoginTOTP(ctx, req.Body.TotpCode); blocked {
+		return resp, nil
+	}
 
 	rawTok, tokHash, err := generateSessionToken()
 	if err != nil {

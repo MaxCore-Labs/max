@@ -44,3 +44,14 @@ type ToolCallRecord struct {
 	StartedAt      int64
 	EndedAt        *int64
 }
+
+// TOTPRecord holds owner 2FA state and lockout counters from the users table.
+type TOTPRecord struct {
+	UserID         domain.ID
+	Username       string
+	TOTPSecret     []byte
+	TOTPEnabled    bool
+	TOTPPending    []byte
+	FailedAttempts int
+	LockedUntil    *int64
+}

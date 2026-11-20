@@ -93,3 +93,8 @@ func (v *Vault) RevertLastByPrefix(ctx context.Context, prefix string) (string, 
 	}
 	return v.runGitLocked(ctx, "rev-parse", "HEAD")
 }
+
+// MirrorSkills synchronizes skills/<slug> into .claude/skills/<slug> on the vault root.
+func (v *Vault) MirrorSkills(ctx context.Context) error {
+	return MirrorSkills(ctx, v.dir)
+}

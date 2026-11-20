@@ -214,5 +214,32 @@ export const api = {
 	setRoutineEnabled: (slug: string, enabled: boolean, opts?: RequestOptions) =>
 		apiRequest<Schemas['Routine']>('POST', `/api/v1/routines/${enc(slug)}/enabled`, { enabled }, opts),
 	runRoutineNow: (slug: string, opts?: RequestOptions) =>
-		apiRequest<Schemas['RunRoutineNowResponse']>('POST', `/api/v1/routines/${enc(slug)}/run`, undefined, opts)
+		apiRequest<Schemas['RunRoutineNowResponse']>('POST', `/api/v1/routines/${enc(slug)}/run`, undefined, opts),
+
+	setupTotp: (opts?: RequestOptions) =>
+		apiRequest<Schemas['TotpSetupResponse']>('POST', '/api/v1/auth/totp/setup', undefined, opts),
+	confirmTotp: (code: string, opts?: RequestOptions) =>
+		apiRequest<Schemas['UserResponse']>('POST', '/api/v1/auth/totp/confirm', { code }, opts),
+
+	listFacts: () => apiRequest<Schemas['FactListResponse']>('GET', '/api/v1/knowledge/facts'),
+	undoLastLearning: (opts?: RequestOptions) =>
+		apiRequest<Schemas['UndoLearnResponse']>('POST', '/api/v1/knowledge/learn/undo', undefined, opts),
+
+	listProposals: (q?: operations['listProposals']['parameters']['query']) =>
+		apiRequest<Schemas['ProposalListResponse']>('GET', `/api/v1/proposals${buildQuery(q)}`),
+	decideProposal: (proposalId: string, approve: boolean, opts?: RequestOptions) =>
+		apiRequest<Schemas['Proposal']>('POST', `/api/v1/proposals/${enc(proposalId)}/decide`, { approve }, opts),
+
+	listConnections: () => apiRequest<Schemas['ConnectionListResponse']>('GET', '/api/v1/connections'),
+	upsertConnection: (name: string, req: Schemas['UpsertConnectionRequest'], opts?: RequestOptions) =>
+		apiRequest<Schemas['ConnectionItem']>('PUT', `/api/v1/connections/${enc(name)}`, req, opts),
+	deleteConnection: (name: string, opts?: RequestOptions) =>
+		apiRequest<void>('DELETE', `/api/v1/connections/${enc(name)}`, undefined, opts),
+
+	listAgentGrants: (agentId: string) =>
+		apiRequest<Schemas['GrantListResponse']>('GET', `/api/v1/agents/${enc(agentId)}/grants`),
+	createAgentGrant: (agentId: string, req: Schemas['CreateGrantRequest'], opts?: RequestOptions) =>
+		apiRequest<Schemas['GrantItem']>('POST', `/api/v1/agents/${enc(agentId)}/grants`, req, opts),
+	revokeGrant: (grantId: string, opts?: RequestOptions) =>
+		apiRequest<void>('DELETE', `/api/v1/grants/${enc(grantId)}`, undefined, opts)
 };

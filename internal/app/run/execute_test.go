@@ -52,7 +52,8 @@ func (v *stubVault) Remove(context.Context, string) error                    { r
 func (v *stubVault) ListDir(context.Context, string) ([]string, error)       { return nil, nil }
 func (v *stubVault) HeadSHA(context.Context) (string, error)                 { return "head0", nil }
 func (v *stubVault) RevertLastByPrefix(context.Context, string) (string, error) { return "rev0", nil }
-func (v *stubVault) RefuseIfProjectSettings(context.Context) error           { return nil }
+func (v *stubVault) MirrorSkills(context.Context) error                         { return nil }
+func (v *stubVault) RefuseIfProjectSettings(context.Context) error              { return nil }
 
 func setupClaimedRun(
 	t *testing.T,

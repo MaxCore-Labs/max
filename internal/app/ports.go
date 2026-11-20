@@ -117,6 +117,7 @@ type Reader interface {
 	FindToolCallByIdem(ctx context.Context, idemKey string) (ToolCallRecord, bool, error)
 	FindDoneToolCallByTarget(ctx context.Context, convID domain.ID, toolName, targetVal string) (ToolCallRecord, bool, error)
 	ListToolCallsByRun(ctx context.Context, runID domain.ID) ([]ToolCallRecord, error)
+	GetOwnerTOTP(ctx context.Context) (TOTPRecord, bool, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -208,6 +209,10 @@ type Tx interface {
 	DeleteConnection(ctx context.Context, name string) error
 	InsertToolCallStarted(ctx context.Context, tc ToolCallRecord) error
 	TransitionToolCallStatus(ctx context.Context, runID domain.ID, toolUseID, fromStatus, toStatus string, result *string, endedAt *int64) (bool, error)
+	SetOwnerTOTPPending(ctx context.Context, userID domain.ID, pending []byte, updatedAt int64) error
+	ConfirmOwnerTOTP(ctx context.Context, userID domain.ID, secret []byte, updatedAt int64) error
+	RecordOwnerTOTPFailure(ctx context.Context, userID domain.ID, attempts int, lockedUntil *int64, updatedAt int64) error
+	ResetOwnerTOTPFailures(ctx context.Context, userID domain.ID, updatedAt int64) error
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
@@ -234,6 +239,7 @@ type Vault interface {
 	ListDir(ctx context.Context, rel string) ([]string, error)
 	HeadSHA(ctx context.Context) (string, error)
 	RevertLastByPrefix(ctx context.Context, prefix string) (string, error)
+	MirrorSkills(ctx context.Context) error
 	RefuseIfProjectSettings(ctx context.Context) error
 }
 

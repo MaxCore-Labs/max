@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { api, type Schemas } from '#lib/api/client.js';
 	import EnginePicker, { type EnginePickerValue } from '#lib/components/EnginePicker.svelte';
+	import GrantForm from '#lib/components/GrantForm.svelte';
 	import MarkdownView from '#lib/components/MarkdownView.svelte';
 	import { t } from '#lib/i18n/vi.js';
 	import { events } from '#lib/state/events.svelte.js';
@@ -11,6 +12,7 @@
 	let agent = $state<Schemas['AgentDetail'] | null>(null);
 	let notes = $state('');
 	let runs = $state<Schemas['Run'][]>([]);
+	let grants = $state<Schemas['GrantItem'][]>([]);
 	let bodyDraft = $state('');
 	let loading = $state(true);
 	let saving = $state(false);
@@ -23,15 +25,17 @@
 		loading = true;
 		error = '';
 		try {
-			const [ag, nt, rn] = await Promise.all([
+			const [ag, nt, rn, gr] = await Promise.all([
 				api.getAgent(id),
 				api.getAgentNotes(id),
-				api.listAgentRuns(id, { limit: 20 })
+				api.listAgentRuns(id, { limit: 20 }),
+				api.listAgentGrants(id)
 			]);
 			agent = ag;
 			bodyDraft = ag.body;
 			notes = nt.content;
 			runs = rn.items;
+			grants = gr.items;
 			if (!systemStatus.settings) {
 				await systemStatus.load();
 			}
@@ -86,6 +90,23 @@
 		if (!agent) return;
 		await api.wakeAgent(agent.id);
 		toast.show({ kind: 'info', messageKey: 'Đã gửi tín hiệu đánh thức' });
+	}
+
+	async function addGrant(req: Schemas['CreateGrantRequest']): Promise<void> {
+		if (!agent) return;
+		saving = true;
+		try {
+			const created = await api.createAgentGrant(agent.id, req);
+			grants = [created, ...grants];
+			toast.show({ kind: 'info', messageKey: 'Đã tạo grant cho agent' });
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function removeGrant(id: string): Promise<void> {
+		await api.revokeGrant(id);
+		grants = grants.filter((g) => g.id !== id);
 	}
 </script>
 
@@ -166,6 +187,30 @@
 					{/each}
 				</ul>
 			{/if}
+		</Card>
+
+		<Card title={t('grants.title')}>
+			<div class="flex flex-col gap-4">
+				<GrantForm loading={saving} onsubmit={(r) => void addGrant(r)} />
+				{#if grants.filter((g) => !g.revokedAt).length > 0}
+					<ul class="divide-y divide-border text-sm">
+						{#each grants.filter((g) => !g.revokedAt) as g (g.id)}
+							<li class="flex flex-wrap items-center justify-between gap-2 py-2">
+								<div>
+									<span class="font-mono text-xs font-semibold">{g.connection}.{g.tool}</span>
+									<span class="ml-2 text-xs text-muted">
+										origins: {g.allowedRootOrigins.join(', ')}
+										{#if g.maxPerDay} · đã dùng {g.usedToday}/{g.maxPerDay}/ngày{/if}
+									</span>
+								</div>
+								<Button variant="danger" onclick={() => void removeGrant(g.id)}>
+									{t('grants.revoke')}
+								</Button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
 		</Card>
 	</div>
 {/if}
