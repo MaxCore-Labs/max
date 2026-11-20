@@ -14,7 +14,7 @@ import (
 
 func setProcessGroup(_ *exec.Cmd) {}
 
-type processMemoryCounters struct {
+type processMemoryCountersEx struct {
 	cb                         uint32
 	pageFaultCount             uint32
 	peakWorkingSetSize         uintptr
@@ -25,6 +25,7 @@ type processMemoryCounters struct {
 	quotaNonPagedPoolUsage     uintptr
 	pagefileUsage              uintptr
 	peakPagefileUsage          uintptr
+	privateUsage               uintptr
 }
 
 var (
@@ -32,18 +33,18 @@ var (
 	procGetProcessMemoryInfo = modPsapi.NewProc("GetProcessMemoryInfo")
 )
 
-func winSelfMemory() (currentWSMB, peakWSMB float64) {
+func winSelfMemory() (privateMB, peakWSMB float64) {
 	h, err := syscall.GetCurrentProcess()
 	if err != nil {
 		return 0, 0
 	}
-	var pmc processMemoryCounters
+	var pmc processMemoryCountersEx
 	pmc.cb = uint32(unsafe.Sizeof(pmc))
 	r1, _, _ := procGetProcessMemoryInfo.Call(uintptr(h), uintptr(unsafe.Pointer(&pmc)), uintptr(pmc.cb))
 	if r1 == 0 {
 		return 0, 0
 	}
-	return float64(pmc.workingSetSize) / (1024 * 1024), float64(pmc.peakWorkingSetSize) / (1024 * 1024)
+	return float64(pmc.privateUsage) / (1024 * 1024), float64(pmc.peakWorkingSetSize) / (1024 * 1024)
 }
 
 func peakSelfRSSMB() float64 {

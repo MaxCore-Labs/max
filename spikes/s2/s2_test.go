@@ -5,19 +5,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func jaccardOverWords(a, b string) float64 {
 	setA := make(map[string]bool)
 	for w := range strings.FieldsSeq(strings.ToLower(a)) {
-		if len(w) > 2 {
+		if utf8.RuneCountInString(w) > 2 {
 			setA[w] = true
 		}
 	}
 	setB := make(map[string]bool)
 	inter := 0
 	for w := range strings.FieldsSeq(strings.ToLower(b)) {
-		if len(w) > 2 {
+		if utf8.RuneCountInString(w) > 2 {
 			if !setB[w] {
 				setB[w] = true
 				if setA[w] {
@@ -34,7 +35,7 @@ func jaccardOverWords(a, b string) float64 {
 }
 
 func TestSynthCorpusBelowJaccardSupersedeThreshold(t *testing.T) {
-	// Verify all 20 rounds of agent-00002 have pairwise Jaccard well below 0.7.
+	// Verify all 20 rounds of agent-00002 have pairwise Jaccard < 0.40 (below nearMatch & 0.7 supersede).
 	const numAgents = 100
 	mems := make([]synthMemory, 0, 20)
 	for r := 0; r < 20; r++ {
@@ -43,8 +44,8 @@ func TestSynthCorpusBelowJaccardSupersedeThreshold(t *testing.T) {
 	for i := 0; i < len(mems); i++ {
 		for j := i + 1; j < len(mems); j++ {
 			sim := jaccardOverWords(mems[i].Content, mems[j].Content)
-			if sim >= 0.65 {
-				t.Fatalf("rounds %d and %d too similar (jaccard=%.2f >= 0.65):\n  %s\n  %s",
+			if sim >= 0.40 {
+				t.Fatalf("rounds %d and %d too similar (jaccard=%.3f >= 0.40):\n  %s\n  %s",
 					i, j, sim, mems[i].Content, mems[j].Content)
 			}
 		}
