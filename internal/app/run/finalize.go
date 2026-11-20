@@ -8,6 +8,7 @@ import (
 
 	"max/internal/app"
 	"max/internal/app/actor"
+	"max/internal/app/coord"
 	"max/internal/domain"
 )
 
@@ -126,6 +127,33 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 
 		if err := tx.ClearTaskCheckout(ctx, runID, nowMs); err != nil {
 			return err
+		}
+
+		if status == domain.RunSucceeded && runRec.TaskID != nil && *runRec.TaskID != "" {
+			isAutoTask := false
+			for _, w := range claimedWakeups {
+				if w.Kind == domain.WakeHeartbeat || w.Kind == domain.WakeRoutine {
+					isAutoTask = true
+					break
+				}
+			}
+			if isAutoTask {
+				if tk, found, _ := tx.GetTask(ctx, *runRec.TaskID); found &&
+					(tk.Status == string(domain.TaskTodo) || tk.Status == string(domain.TaskInProgress)) {
+					if err := tx.UpdateTaskStatus(ctx, *runRec.TaskID, domain.TaskDone, nil, nowMs); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		if s.deps.Coord != nil && runRec.TaskID != nil && *runRec.TaskID != "" &&
+			(status == domain.RunSucceeded || status == domain.RunParked || status == domain.RunTurnLimit) {
+			stChanged, chAdded, _ := tx.HasTaskProgressedSince(ctx, *runRec.TaskID, runRec.StartedAt)
+			progressed := coord.DidRunProgress(stChanged, o.TouchedPaths, chAdded)
+			if err := s.deps.Coord.NoteRunOutcome(ctx, tx, *runRec.TaskID, progressed); err != nil {
+				return err
+			}
 		}
 
 		switch {
@@ -247,6 +275,31 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 
 		if err := tx.SetAgentActiveRun(ctx, runRec.AgentID, nil); err != nil {
 			return err
+		}
+		if o.ScopeViolations > 0 {
+			totalV, paused, vErr := tx.RecordScopeViolations(ctx, runRec.AgentID, 1, nowMs)
+			if vErr != nil {
+				return vErr
+			}
+			refKind := "agent"
+			refID := runRec.AgentID
+			dedupe := fmt.Sprintf("scope-violation:%s:%d", runRec.AgentID, totalV)
+			title := fmt.Sprintf("Hoàn tác ghi ngoài phạm vi của %s (lần %d)", ag.Slug, totalV)
+			if paused {
+				title = fmt.Sprintf("Tạm dừng agent %s sau 3 lần ghi ngoài phạm vi", ag.Slug)
+			}
+			_ = tx.InsertInboxItem(ctx, app.InboxItemRecord{
+				ID:        s.deps.IDs.New(),
+				Kind:      "error",
+				Title:     title,
+				Body:      fmt.Sprintf("Run %s có %d thay đổi ngoài phạm vi đã bị hoàn tác.", runID, o.ScopeViolations),
+				RefKind:   &refKind,
+				RefID:     &refID,
+				AgentID:   &refID,
+				Urgency:   "high",
+				DedupeKey: &dedupe,
+				CreatedAt: nowMs,
+			})
 		}
 		if err := tx.SetAgentLastRunAt(ctx, runRec.AgentID, nowMs); err != nil {
 			return err

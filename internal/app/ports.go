@@ -60,6 +60,10 @@ type Reader interface {
 	GetQuotaWindowTokens(ctx context.Context, engine domain.EngineName, window string, windowStartMs int64) (tokens int64, runs int, err error)
 	CountQuotaLedgerRows(ctx context.Context, engine domain.EngineName, window string) (int, error)
 	CountFutureQuotaLedgerRows(ctx context.Context, afterMs int64) (int, error)
+	CountAgentRunsSince(ctx context.Context, agentID domain.ID, sinceMs int64) (int, error)
+	GetAgentDailyTokens(ctx context.Context, day string, agentID domain.ID) (int64, error)
+	GetTeamDailyTokens(ctx context.Context, day string, teamID domain.ID) (int64, error)
+	ListQuotaPausedAgents(ctx context.Context) ([]AgentRecord, error)
 	GetOwnerUser(ctx context.Context) (UserRecord, bool, error)
 	GetUserByID(ctx context.Context, id domain.ID) (UserRecord, bool, error)
 	GetAuthSession(ctx context.Context, tokenHash string) (AuthSessionRecord, bool, error)
@@ -77,6 +81,23 @@ type Reader interface {
 	CountQueuedByPriority(ctx context.Context) (map[int]int, error)
 	ListAuditLogs(ctx context.Context, limit int) ([]AuditLogRecord, error)
 	GetEngineBinary(ctx context.Context, engine domain.EngineName) (EngineBinaryRecord, bool, error)
+	ListTaskBlockers(ctx context.Context, taskID domain.ID) ([]domain.ID, error)
+	ListAllBlockerEdges(ctx context.Context) (map[domain.ID][]domain.ID, error)
+	ListDependents(ctx context.Context, blockerID domain.ID) ([]TaskRecord, error)
+	ListChildTasks(ctx context.Context, parentID domain.ID) ([]TaskRecord, error)
+	ListTaskEvents(ctx context.Context, taskID domain.ID, limit int) ([]TaskEventRecord, error)
+	CountTaskEvents(ctx context.Context, taskID domain.ID) (int, error)
+	CountPairMessagesSince(ctx context.Context, taskID, agentA, agentB domain.ID, sinceMs int64) (int, error)
+	ListScopedTasks(ctx context.Context, f TaskFilter) ([]TaskRecord, error)
+	ListTeamAgents(ctx context.Context, teamID domain.ID) ([]AgentRecord, error)
+	ListWatchdogCandidateTasks(ctx context.Context, staleBeforeMs, nowMs int64) ([]TaskRecord, error)
+	GetConversationByTask(ctx context.Context, agentID, taskID domain.ID) (ConversationRecord, bool, error)
+	GetMaxWakeupHopsForTask(ctx context.Context, agentID, taskID domain.ID) (int, error)
+	HasWakeupIdemKey(ctx context.Context, idemKey string) (bool, error)
+	HasTaskProgressedSince(ctx context.Context, taskID domain.ID, sinceMs int64) (statusChanged bool, childrenAdded int, err error)
+	GetRoutineState(ctx context.Context, slug string) (RoutineStateRecord, bool, error)
+	ListDueHeartbeatAgents(ctx context.Context, nowMs int64, limit int) ([]DueHeartbeatAgent, error)
+	HasHeartbeatWork(ctx context.Context, agentID domain.ID, lastRunAt *int64) (bool, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -84,10 +105,13 @@ type Tx interface {
 	Reader
 	UpsertKV(ctx context.Context, key, val string, updatedAt int64) error
 	InsertTeam(ctx context.Context, t TeamRecord) error
+	UpsertSyncedTeam(ctx context.Context, t TeamRecord) error
 	EnsureTeamBySlug(ctx context.Context, slug, newID string) (domain.ID, error)
 	InsertAgent(ctx context.Context, a AgentRecord) error
 	UpsertSyncedAgent(ctx context.Context, a AgentRecord) error
 	SetAgentManager(ctx context.Context, agentID domain.ID, managerID *domain.ID) error
+	SetAgentStatus(ctx context.Context, agentID domain.ID, status domain.AgentStatus) error
+	RecordScopeViolations(ctx context.Context, agentID domain.ID, addCount int, nowMs int64) (total int, paused bool, err error)
 	SetAgentCooldown(ctx context.Context, agentID domain.ID, cooldownUntil int64) error
 	SetAgentLastRunAt(ctx context.Context, agentID domain.ID, lastRunAt int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error
@@ -140,6 +164,18 @@ type Tx interface {
 	AppendAuditLog(ctx context.Context, rec AuditLogRecord) error
 	UpsertEngineBinary(ctx context.Context, rec EngineBinaryRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
+	EnsureTaskConversation(ctx context.Context, agentID, taskID, newConvID domain.ID) (domain.ID, error)
+	InsertTaskBlocker(ctx context.Context, taskID, blockedBy domain.ID) error
+	CheckoutTaskAtomic(ctx context.Context, taskID, agentID, runID domain.ID, updatedAt int64) (bool, error)
+	UpdateTaskStatus(ctx context.Context, taskID domain.ID, status domain.TaskStatus, reason *domain.BlockedReason, updatedAt int64) error
+	UpdateTaskReviewState(ctx context.Context, taskID domain.ID, status domain.TaskStatus, reviewerID *domain.ID, reviewRounds int, updatedAt int64) error
+	UpdateTaskAssignee(ctx context.Context, taskID domain.ID, assigneeID *domain.ID, status domain.TaskStatus, reason *domain.BlockedReason, updatedAt int64) error
+	UpdateTaskIdleRuns(ctx context.Context, taskID domain.ID, idleRuns int, updatedAt int64) error
+	InsertTaskEvent(ctx context.Context, ev TaskEventRecord) error
+	ExpirePendingApprovalsByTasks(ctx context.Context, taskIDs []domain.ID, nowMs int64) (int, error)
+	ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]RunRecord, error)
+	UpsertRoutineState(ctx context.Context, st RoutineStateRecord) error
+	SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
@@ -161,6 +197,7 @@ type Vault interface {
 	PullIfIdle(ctx context.Context, runsActive int) error
 	Push(ctx context.Context) error
 	Read(ctx context.Context, rel string) ([]byte, error)
+	Write(ctx context.Context, rel string, data []byte) error
 	ListDir(ctx context.Context, rel string) ([]string, error)
 	RefuseIfProjectSettings(ctx context.Context) error
 }

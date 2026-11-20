@@ -26,6 +26,7 @@ type Claimed struct {
 	Wakeups                        []Wakeup
 	SessionID                      string
 	EngineChanged                  bool
+	ConfigRev                      string
 }
 
 // TeamRecord represents a row in the teams table.
@@ -150,6 +151,7 @@ type RunRecord struct {
 	Error            *string
 	Summary          *string
 	VaultCommit      *string
+	ConfigRev        string
 	StartedAt        int64
 	EndedAt          *int64
 }
@@ -180,6 +182,7 @@ type CandidateAgent struct {
 	TeamID        domain.ID
 	EnginesJSON   string
 	ModelsJSON    string
+	ConfigRev     string
 	CooldownUntil int64
 	ReadyPriority int
 	TeamRunning   int
@@ -303,4 +306,49 @@ type EngineBinaryRecord struct {
 	SHA256      string
 	Version     string
 	ConfirmedAt int64
+}
+
+// TaskEventRecord represents an append-only row in task_events.
+type TaskEventRecord struct {
+	ID            domain.ID
+	TaskID        domain.ID
+	Kind          string
+	ActorKind     string
+	ActorID       *domain.ID
+	TargetAgentID *domain.ID
+	Body          string
+	CreatedAt     int64
+}
+
+// TaskFilter scopes task list queries by visibility and optional filters.
+type TaskFilter struct {
+	ViewerAgentID string
+	ViewerTeamID  string
+	Status        string
+	AssigneeID    string
+	GoalID        string
+	RootID        string
+	Limit         int
+	BeforeTS      *int64
+	BeforeID      string
+}
+
+// RoutineStateRecord represents a row in routine_state.
+type RoutineStateRecord struct {
+	Slug                string
+	LastScheduledMin    *int64
+	LastFiredAt         *int64
+	ActiveTaskID        *domain.ID
+	ConsecutiveFailures int
+	AutoDisabled        bool
+	BadFileReported     bool
+	UpdatedAt           int64
+}
+
+// DueHeartbeatAgent represents an active agent whose next_heartbeat_at is due.
+type DueHeartbeatAgent struct {
+	ID        domain.ID
+	Slug      string
+	Heartbeat string
+	LastRunAt *int64
 }

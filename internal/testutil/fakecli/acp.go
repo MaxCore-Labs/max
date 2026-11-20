@@ -26,6 +26,7 @@ type ACPScenario struct {
 	RPCErrorCode       int         `json:"rpc_error_code"`
 	RPCErrorMessage    string      `json:"rpc_error_message"`
 	StderrText         string      `json:"stderr_text"`
+	capturedMCP        *fakeMCPSpec
 }
 
 type ACPToolSim struct {
@@ -123,12 +124,14 @@ func runACPMode(args []string) {
 					},
 				})
 			case "session/new":
+				captureMCPServer(&sc, msg.Params)
 				sendJSON(map[string]any{
 					"jsonrpc": "2.0",
 					"id":      msg.ID,
 					"result":  map[string]any{"sessionId": sc.SessionID},
 				})
 			case "session/load":
+				captureMCPServer(&sc, msg.Params)
 				for _, replay := range sc.ReplayChunksOnLoad {
 					sendJSON(map[string]any{
 						"jsonrpc": "2.0",
@@ -232,6 +235,14 @@ func handleFakePrompt(
 			"error":   map[string]any{"code": code, "message": sc.RPCErrorMessage},
 		})
 		return
+	}
+
+	if os.Getenv("FAKECLI_ACP_CALL_MCP_PING") == "1" && sc.capturedMCP != nil {
+		if pingTxt, err := callMCPPing(sc.capturedMCP); err == nil && pingTxt != "" {
+			sc.ResponseChunks = append(sc.ResponseChunks, pingTxt)
+		} else if err != nil {
+			sc.ResponseChunks = append(sc.ResponseChunks, "mcp_ping_err:"+err.Error())
+		}
 	}
 
 	for _, ch := range sc.ResponseChunks {

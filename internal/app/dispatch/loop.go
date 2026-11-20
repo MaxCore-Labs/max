@@ -113,9 +113,15 @@ func (d *Dispatcher) tryDispatch(ctx context.Context, wg *sync.WaitGroup) {
 	}
 
 	now := d.deps.Clock.Now()
+	var agentAllowed func(context.Context, domain.ID, domain.ID, time.Time) (bool, string)
+	if d.deps.Quota != nil {
+		_ = d.deps.Quota.RefreshDailyQuotas(ctx, now)
+		agentAllowed = d.deps.Quota.AgentAllowed
+	}
 	claimed, err := d.deps.Actors.ClaimBatch(ctx, actor.Capacity{
-		Free:  free,
-		Admit: admitFn,
+		Free:         free,
+		Admit:        admitFn,
+		AgentAllowed: agentAllowed,
 	}, now)
 	if err != nil || len(claimed) == 0 {
 		return

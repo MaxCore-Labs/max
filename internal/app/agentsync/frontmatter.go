@@ -28,6 +28,7 @@ type AgentFile struct {
 	QuotaTokensDay     *int64
 	Heartbeat          string
 	Params             map[string]any
+	Sensitive          bool
 	AllowUngatedEngine bool
 	Body               string
 	Warnings           []string
@@ -47,17 +48,17 @@ type rawFrontmatter struct {
 	QuotaTokensDay     *int64            `yaml:"quota_tokens_day"`
 	Heartbeat          string            `yaml:"heartbeat"`
 	Params             map[string]any    `yaml:"params"`
+	Sensitive          bool              `yaml:"sensitive"`
 	AllowUngatedEngine bool              `yaml:"allow_ungated_engine"`
 }
 
-// Parse validates UTF-8, extracts YAML frontmatter + Markdown body from raw AGENT.md bytes, and checks schema rules.
-func Parse(raw []byte) (AgentFile, error) {
+func splitFrontmatter(raw []byte) (yamlText, body string, err error) {
 	if !utf8.Valid(raw) {
-		return AgentFile{}, fmt.Errorf("invalid utf-8 encoding in AGENT.md")
+		return "", "", fmt.Errorf("invalid utf-8 encoding")
 	}
 	norm := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	if !strings.HasPrefix(norm, "---\n") {
-		return AgentFile{}, fmt.Errorf("missing opening --- frontmatter fence")
+		return "", "", fmt.Errorf("missing opening --- frontmatter fence")
 	}
 	rest := norm[len("---\n"):]
 	endIdx := strings.Index(rest, "\n---\n")
@@ -67,12 +68,18 @@ func Parse(raw []byte) (AgentFile, error) {
 			endIdx = len(rest) - len("\n---")
 			fenceLen = len("\n---")
 		} else {
-			return AgentFile{}, fmt.Errorf("missing closing --- frontmatter fence")
+			return "", "", fmt.Errorf("missing closing --- frontmatter fence")
 		}
 	}
+	return rest[:endIdx], rest[endIdx+fenceLen:], nil
+}
 
-	yamlText := rest[:endIdx]
-	body := rest[endIdx+fenceLen:]
+// Parse validates UTF-8, extracts YAML frontmatter + Markdown body from raw AGENT.md bytes, and checks schema rules.
+func Parse(raw []byte) (AgentFile, error) {
+	yamlText, body, err := splitFrontmatter(raw)
+	if err != nil {
+		return AgentFile{}, err
+	}
 
 	var rf rawFrontmatter
 	dec := yaml.NewDecoder(bytes.NewReader([]byte(yamlText)))
@@ -146,6 +153,7 @@ func Parse(raw []byte) (AgentFile, error) {
 		QuotaTokensDay:     rf.QuotaTokensDay,
 		Heartbeat:          strings.TrimSpace(rf.Heartbeat),
 		Params:             rf.Params,
+		Sensitive:          rf.Sensitive,
 		AllowUngatedEngine: rf.AllowUngatedEngine,
 		Body:               body,
 		Warnings:           warnings,

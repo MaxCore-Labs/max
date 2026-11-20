@@ -43,9 +43,15 @@ func NewService(store app.Store, vault app.Vault, clock app.Clock, ids app.IDGen
 	}
 }
 
-// SyncAll scans agents/*/AGENT.md, preserves previous DB rows on broken/ungated configs while creating Inbox alerts,
+// SyncAll scans teams/*/TEAM.md and agents/*/AGENT.md, preserves previous DB rows on broken/ungated configs while creating Inbox alerts,
 // and updates changed agents idempotently by config_rev.
 func (s *Service) SyncAll(ctx context.Context) (updated int, problems []Problem, err error) {
+	teamProbs, err := s.syncTeams(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	problems = append(problems, teamProbs...)
+
 	entries, err := s.vault.ListDir(ctx, "agents")
 	if err != nil {
 		return 0, nil, fmt.Errorf("list vault agents: %w", err)
@@ -185,13 +191,13 @@ func (s *Service) SyncAll(ctx context.Context) (updated int, problems []Problem,
 }
 
 func checkSensitiveGate(af AgentFile) error {
-	if af.Browser != domain.BrowserOwner || af.AllowUngatedEngine {
+	if (af.Browser != domain.BrowserOwner && !af.Sensitive) || af.AllowUngatedEngine {
 		return nil
 	}
 	for _, e := range af.Engines {
 		if lvl := engineIsolationLevel(e); lvl > 1 {
 			return fmt.Errorf(
-				"browser: owner is not allowed on level-%d engine %q without allow_ungated_engine: true",
+				"sensitive role or browser: owner is not allowed on level-%d engine %q without allow_ungated_engine: true",
 				lvl, e,
 			)
 		}

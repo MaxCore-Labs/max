@@ -22,6 +22,7 @@ type ProcSpec struct {
 	Bin                string
 	Args, Env          []string
 	Dir                string
+	OSUser             string
 	Stderr             io.Writer
 	IdleTimeout, Grace time.Duration
 }
@@ -44,6 +45,7 @@ func Start(ctx context.Context, s ProcSpec) (*Proc, io.WriteCloser, <-chan []byt
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("start cancelled: %w", err)
 	}
+	s = applyOSUserWrapper(s)
 	cmd := exec.Command(s.Bin, s.Args...)
 	cmd.Dir = s.Dir
 	if s.Env == nil {

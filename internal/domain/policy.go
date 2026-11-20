@@ -127,7 +127,7 @@ func decideRead(a AgentPolicy, c ToolCall) Decision {
 func decideCoord(a AgentPolicy, c ToolCall) Decision {
 	if a.Autonomy == AutonomySuggest {
 		switch c.Name {
-		case "ask_owner", "notify_owner", "task_comment", "ping":
+		case "ask_owner", "notify_owner", "task_comment", "task_get", "task_list", "ping":
 			return Decision{Verdict: Allow}
 		default:
 			return Decision{Verdict: Deny, Reason: "suggest-mode agent may only comment or notify/ask owner"}

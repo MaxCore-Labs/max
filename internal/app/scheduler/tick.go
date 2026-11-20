@@ -8,11 +8,13 @@ import (
 	"max/internal/app"
 	"max/internal/app/actor"
 	"max/internal/app/approvals"
+	"max/internal/app/coord"
 )
 
 const (
-	wakeupRetention = 30 * 24 * time.Hour
-	defaultInterval = 30 * time.Second
+	wakeupRetention  = 30 * 24 * time.Hour
+	defaultInterval  = 30 * time.Second
+	watchdogInterval = 10 * time.Minute
 )
 
 // Scheduler executes periodic internal housekeeping ticks (due wakeups, approval expiry, counter reconciliation, retention).
@@ -20,10 +22,15 @@ type Scheduler struct {
 	store     app.Store
 	actors    *actor.Service
 	approvals *approvals.Service
+	coord     *coord.Service
+	vault     app.Vault
+	tz        *time.Location
+	ids       app.IDGen
 	notify    func()
 
-	mu          sync.Mutex
-	maxObserved time.Time
+	mu             sync.Mutex
+	maxObserved    time.Time
+	lastWatchdogAt time.Time
 }
 
 // New constructs an internal Scheduler.
@@ -32,8 +39,28 @@ func New(store app.Store, actors *actor.Service, approvalsSvc *approvals.Service
 		store:     store,
 		actors:    actors,
 		approvals: approvalsSvc,
+		tz:        time.UTC,
+		ids:       app.UUIDv7Gen{},
 		notify:    notify,
 	}
+}
+
+// WithCoord attaches the task coordination service so Tick runs Watchdog every 10 minutes.
+func (s *Scheduler) WithCoord(coordSvc *coord.Service) *Scheduler {
+	s.coord = coordSvc
+	return s
+}
+
+// WithRoutines attaches the vault, timezone, and ID generator used by FireRoutines and FireHeartbeats.
+func (s *Scheduler) WithRoutines(vault app.Vault, tz *time.Location, ids app.IDGen) *Scheduler {
+	s.vault = vault
+	if tz != nil {
+		s.tz = tz
+	}
+	if ids != nil {
+		s.ids = ids
+	}
+	return s
 }
 
 // Run executes Tick every 30 seconds until ctx is cancelled.
@@ -99,7 +126,25 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) error {
 		}
 	}
 
-	if (promoted > 0 || expired > 0) && s.notify != nil {
+	var watchdogWoken int
+	if s.coord != nil && !clockWentBackward {
+		s.mu.Lock()
+		dueWatchdog := s.lastWatchdogAt.IsZero() || !now.Before(s.lastWatchdogAt.Add(watchdogInterval))
+		if dueWatchdog {
+			s.lastWatchdogAt = now
+		}
+		s.mu.Unlock()
+		if dueWatchdog {
+			watchdogWoken, _ = s.coord.Watchdog(ctx, now)
+		}
+	}
+
+	if s.vault != nil && !clockWentBackward {
+		_ = s.FireRoutines(ctx, now)
+		_ = s.FireHeartbeats(ctx, now)
+	}
+
+	if (promoted > 0 || expired > 0 || watchdogWoken > 0) && s.notify != nil {
 		s.notify()
 	}
 	return nil

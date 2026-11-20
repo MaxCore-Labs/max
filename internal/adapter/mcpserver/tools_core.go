@@ -55,6 +55,8 @@ func registerCoreTools(mcpSrv *mcp.Server, svc *tools.Service, caller tools.Call
 		res := svc.NoteUpdate(ctx, caller, args.Content)
 		return toMCPResult(maybeCap(svc, caller, "note_update", res)), nil, nil
 	})
+
+	registerCoordTools(mcpSrv, svc, caller)
 }
 
 func maybeCap(svc *tools.Service, c tools.Caller, name string, r tools.Result) tools.Result {

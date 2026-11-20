@@ -3,6 +3,8 @@ package invariants
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"strings"
 	"time"
 
 	"max/internal/adapter/sqlite"
@@ -21,6 +23,8 @@ type Config struct {
 	Quiescent          bool
 	Recovered          bool
 	SlotCaps           map[domain.EngineName]int
+	VaultDir           string
+	FailoverStuck      int
 	ClaimP95           time.Duration
 	ClaimP99           time.Duration
 	InteractiveLatency time.Duration
@@ -53,6 +57,16 @@ func WithClaimLatencies(p95, p99 time.Duration) Option {
 // WithInteractiveLatency checks I9 (owner interactive wakeup starts <= 5s on idle agent).
 func WithInteractiveLatency(d time.Duration) Option {
 	return func(c *Config) { c.InteractiveLatency = d }
+}
+
+// WithVaultDir checks I13 (vault git working tree has zero uncommitted out-of-scope edits when quiescent).
+func WithVaultDir(dir string) Option {
+	return func(c *Config) { c.VaultDir = dir }
+}
+
+// WithFailoverStuck checks I14 (multi-engine agents stuck when an alternative engine is healthy).
+func WithFailoverStuck(n int) Option {
+	return func(c *Config) { c.FailoverStuck = n }
 }
 
 // Check evaluates invariants I1-I12 against store and optional runtime observations.
@@ -102,6 +116,21 @@ func Check(ctx context.Context, store app.Store, opts ...Option) []Violation {
 		out = append(out, Violation{
 			Code:    "I11",
 			Message: fmt.Sprintf("%d ready agent(s) starved while slots and quota available", cfg.StarvedAgents),
+		})
+	}
+	if cfg.VaultDir != "" {
+		cmd := exec.CommandContext(ctx, "git", "-C", cfg.VaultDir, "status", "--porcelain=v1", "-uall")
+		if raw, err := cmd.Output(); err == nil && strings.TrimSpace(string(raw)) != "" {
+			out = append(out, Violation{
+				Code:    "I13",
+				Message: fmt.Sprintf("uncommitted vault working tree changes remaining after run: %s", strings.TrimSpace(string(raw))),
+			})
+		}
+	}
+	if cfg.FailoverStuck > 0 {
+		out = append(out, Violation{
+			Code:    "I14",
+			Message: fmt.Sprintf("%d multi-engine agent(s) blocked despite healthy fallback engine", cfg.FailoverStuck),
 		})
 	}
 

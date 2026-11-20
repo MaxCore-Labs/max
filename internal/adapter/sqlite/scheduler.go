@@ -2,8 +2,11 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
+	"max/internal/app"
 	"max/internal/domain"
 )
 
@@ -94,6 +97,108 @@ func (t *sqliteTx) SetTeamRunningRaw(ctx context.Context, teamID domain.ID, runn
 	_, err := t.q.ExecContext(ctx, `UPDATE teams SET running = ? WHERE id = ?`, running, teamID)
 	if err != nil {
 		return fmt.Errorf("set team running raw: %w", err)
+	}
+	return nil
+}
+
+func (r *sqliteReader) GetRoutineState(ctx context.Context, slug string) (app.RoutineStateRecord, bool, error) {
+	var (
+		st                      app.RoutineStateRecord
+		autoDisabled, badReport int
+	)
+	err := r.q.QueryRowContext(ctx, `
+		SELECT slug, last_scheduled_min, last_fired_at, active_task_id,
+		       consecutive_failures, auto_disabled, bad_file_reported, updated_at
+		FROM routine_state WHERE slug = ?`, slug,
+	).Scan(
+		&st.Slug, &st.LastScheduledMin, &st.LastFiredAt, &st.ActiveTaskID,
+		&st.ConsecutiveFailures, &autoDisabled, &badReport, &st.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return app.RoutineStateRecord{}, false, nil
+	}
+	if err != nil {
+		return app.RoutineStateRecord{}, false, fmt.Errorf("get routine_state %q: %w", slug, err)
+	}
+	st.AutoDisabled = autoDisabled != 0
+	st.BadFileReported = badReport != 0
+	return st, true, nil
+}
+
+func (r *sqliteReader) ListDueHeartbeatAgents(ctx context.Context, nowMs int64, limit int) ([]app.DueHeartbeatAgent, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	rows, err := r.q.QueryContext(ctx, `
+		SELECT a.id, a.slug, COALESCE(k.value, ''), a.last_run_at
+		FROM agents a
+		LEFT JOIN kv k ON k.key = 'hb_cron:' || a.id
+		WHERE a.next_heartbeat_at IS NOT NULL
+		  AND a.next_heartbeat_at <= ?
+		  AND a.status = 'active'
+		ORDER BY a.next_heartbeat_at ASC
+		LIMIT ?`, nowMs, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list due heartbeat agents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []app.DueHeartbeatAgent
+	for rows.Next() {
+		var d app.DueHeartbeatAgent
+		if err := rows.Scan(&d.ID, &d.Slug, &d.Heartbeat, &d.LastRunAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+func (r *sqliteReader) HasHeartbeatWork(ctx context.Context, agentID domain.ID, lastRunAt *int64) (bool, error) {
+	if lastRunAt == nil {
+		return true, nil
+	}
+	var count int
+	if err := r.q.QueryRowContext(ctx, `
+		SELECT (
+			(SELECT COUNT(*) FROM tasks WHERE (assignee_agent_id = ? OR created_by_agent = ?) AND status NOT IN ('done', 'cancelled')) +
+			(SELECT COUNT(*) FROM inbox_items WHERE resolved_at IS NULL) +
+			(SELECT COUNT(*) FROM tasks WHERE updated_at >= ?)
+		)`, agentID, agentID, *lastRunAt,
+	).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (t *sqliteTx) UpsertRoutineState(ctx context.Context, st app.RoutineStateRecord) error {
+	_, err := t.q.ExecContext(ctx, `
+		INSERT INTO routine_state (
+			slug, last_scheduled_min, last_fired_at, active_task_id,
+			consecutive_failures, auto_disabled, bad_file_reported, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(slug) DO UPDATE SET
+			last_scheduled_min = excluded.last_scheduled_min,
+			last_fired_at = excluded.last_fired_at,
+			active_task_id = excluded.active_task_id,
+			consecutive_failures = excluded.consecutive_failures,
+			auto_disabled = excluded.auto_disabled,
+			bad_file_reported = excluded.bad_file_reported,
+			updated_at = excluded.updated_at`,
+		st.Slug, st.LastScheduledMin, st.LastFiredAt, st.ActiveTaskID,
+		st.ConsecutiveFailures, boolInt(st.AutoDisabled), boolInt(st.BadFileReported), st.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert routine_state %q: %w", st.Slug, err)
+	}
+	return nil
+}
+
+func (t *sqliteTx) SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error {
+	if _, err := t.q.ExecContext(ctx, `UPDATE agents SET next_heartbeat_at = ? WHERE id = ?`, nextAtMs, agentID); err != nil {
+		return fmt.Errorf("set agent next_heartbeat_at: %w", err)
+	}
+	if cronExpr != "" {
+		return t.UpsertKV(ctx, "hb_cron:"+agentID, cronExpr, 0)
 	}
 	return nil
 }
