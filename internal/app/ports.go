@@ -91,6 +91,9 @@ type Reader interface {
 	GetMaxWakeupHopsForTask(ctx context.Context, agentID, taskID domain.ID) (int, error)
 	HasWakeupIdemKey(ctx context.Context, idemKey string) (bool, error)
 	HasTaskProgressedSince(ctx context.Context, taskID domain.ID, sinceMs int64) (statusChanged bool, childrenAdded int, err error)
+	GetRoutineState(ctx context.Context, slug string) (RoutineStateRecord, bool, error)
+	ListDueHeartbeatAgents(ctx context.Context, nowMs int64, limit int) ([]DueHeartbeatAgent, error)
+	HasHeartbeatWork(ctx context.Context, agentID domain.ID, lastRunAt *int64) (bool, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -165,6 +168,8 @@ type Tx interface {
 	InsertTaskEvent(ctx context.Context, ev TaskEventRecord) error
 	ExpirePendingApprovalsByTasks(ctx context.Context, taskIDs []domain.ID, nowMs int64) (int, error)
 	ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]RunRecord, error)
+	UpsertRoutineState(ctx context.Context, st RoutineStateRecord) error
+	SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.

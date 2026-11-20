@@ -129,6 +129,24 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 			return err
 		}
 
+		if status == domain.RunSucceeded && runRec.TaskID != nil && *runRec.TaskID != "" {
+			isAutoTask := false
+			for _, w := range claimedWakeups {
+				if w.Kind == domain.WakeHeartbeat || w.Kind == domain.WakeRoutine {
+					isAutoTask = true
+					break
+				}
+			}
+			if isAutoTask {
+				if tk, found, _ := tx.GetTask(ctx, *runRec.TaskID); found &&
+					(tk.Status == string(domain.TaskTodo) || tk.Status == string(domain.TaskInProgress)) {
+					if err := tx.UpdateTaskStatus(ctx, *runRec.TaskID, domain.TaskDone, nil, nowMs); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
 		if s.deps.Coord != nil && runRec.TaskID != nil && *runRec.TaskID != "" &&
 			(status == domain.RunSucceeded || status == domain.RunParked || status == domain.RunTurnLimit) {
 			stChanged, chAdded, _ := tx.HasTaskProgressedSince(ctx, *runRec.TaskID, runRec.StartedAt)

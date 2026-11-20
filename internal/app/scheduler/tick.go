@@ -23,6 +23,9 @@ type Scheduler struct {
 	actors    *actor.Service
 	approvals *approvals.Service
 	coord     *coord.Service
+	vault     app.Vault
+	tz        *time.Location
+	ids       app.IDGen
 	notify    func()
 
 	mu             sync.Mutex
@@ -36,6 +39,8 @@ func New(store app.Store, actors *actor.Service, approvalsSvc *approvals.Service
 		store:     store,
 		actors:    actors,
 		approvals: approvalsSvc,
+		tz:        time.UTC,
+		ids:       app.UUIDv7Gen{},
 		notify:    notify,
 	}
 }
@@ -43,6 +48,18 @@ func New(store app.Store, actors *actor.Service, approvalsSvc *approvals.Service
 // WithCoord attaches the task coordination service so Tick runs Watchdog every 10 minutes.
 func (s *Scheduler) WithCoord(coordSvc *coord.Service) *Scheduler {
 	s.coord = coordSvc
+	return s
+}
+
+// WithRoutines attaches the vault, timezone, and ID generator used by FireRoutines and FireHeartbeats.
+func (s *Scheduler) WithRoutines(vault app.Vault, tz *time.Location, ids app.IDGen) *Scheduler {
+	s.vault = vault
+	if tz != nil {
+		s.tz = tz
+	}
+	if ids != nil {
+		s.ids = ids
+	}
 	return s
 }
 
@@ -120,6 +137,11 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) error {
 		if dueWatchdog {
 			watchdogWoken, _ = s.coord.Watchdog(ctx, now)
 		}
+	}
+
+	if s.vault != nil && !clockWentBackward {
+		_ = s.FireRoutines(ctx, now)
+		_ = s.FireHeartbeats(ctx, now)
 	}
 
 	if (promoted > 0 || expired > 0 || watchdogWoken > 0) && s.notify != nil {

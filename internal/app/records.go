@@ -332,3 +332,23 @@ type TaskFilter struct {
 	BeforeTS      *int64
 	BeforeID      string
 }
+
+// RoutineStateRecord represents a row in routine_state.
+type RoutineStateRecord struct {
+	Slug                string
+	LastScheduledMin    *int64
+	LastFiredAt         *int64
+	ActiveTaskID        *domain.ID
+	ConsecutiveFailures int
+	AutoDisabled        bool
+	BadFileReported     bool
+	UpdatedAt           int64
+}
+
+// DueHeartbeatAgent represents an active agent whose next_heartbeat_at is due.
+type DueHeartbeatAgent struct {
+	ID        domain.ID
+	Slug      string
+	Heartbeat string
+	LastRunAt *int64
+}
