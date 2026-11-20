@@ -106,6 +106,9 @@ type Reader interface {
 	ListGoalsPage(ctx context.Context, status string, limit int, beforeTS *int64, beforeID string) ([]GoalRecord, error)
 	ListTaskEventsPage(ctx context.Context, taskID domain.ID, limit int, afterTS *int64, afterID string) ([]TaskEventRecord, error)
 	ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]RunRecord, error)
+	ListThreadMessagesAsc(ctx context.Context, threadID domain.ID, afterMsgID *domain.ID, limit int) ([]MessageRecord, error)
+	GetProposal(ctx context.Context, id domain.ID) (ProposalRecord, bool, error)
+	ListProposals(ctx context.Context, status string, limit int) ([]ProposalRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -185,6 +188,9 @@ type Tx interface {
 	UpsertRoutineState(ctx context.Context, st RoutineStateRecord) error
 	SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error
 	MarkOutboxSent(ctx context.Context, id int64, sentAt int64) error
+	SetThreadLearnedThrough(ctx context.Context, threadID, msgID domain.ID) error
+	InsertProposal(ctx context.Context, p ProposalRecord) error
+	UpdateProposalStatus(ctx context.Context, id domain.ID, status string, decidedAt int64) error
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
@@ -207,7 +213,10 @@ type Vault interface {
 	Push(ctx context.Context) error
 	Read(ctx context.Context, rel string) ([]byte, error)
 	Write(ctx context.Context, rel string, data []byte) error
+	Remove(ctx context.Context, rel string) error
 	ListDir(ctx context.Context, rel string) ([]string, error)
+	HeadSHA(ctx context.Context) (string, error)
+	RevertLastByPrefix(ctx context.Context, prefix string) (string, error)
 	RefuseIfProjectSettings(ctx context.Context) error
 }
 
