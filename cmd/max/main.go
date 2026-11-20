@@ -37,6 +37,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runEngineCmd(args[1:], stdout, stderr)
 	case "loadtest":
 		return runLoadtest(args[1:], stdout, stderr)
+	case "eval":
+		return runEval(args[1:], stdout, stderr)
 	case "admin":
 		return runAdmin(args[1:], os.Stdin, stdout, stderr)
 	case "mcp":

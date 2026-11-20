@@ -31,6 +31,9 @@ func (v *Vault) EnsureInstalled(ctx context.Context) error {
 	if err := copyTemplateTree(vaulttemplate.FS, v.dir); err != nil {
 		return fmt.Errorf("install vault template: %w", err)
 	}
+	if err := MirrorSkills(ctx, v.dir); err != nil {
+		return fmt.Errorf("mirror vault skills: %w", err)
+	}
 	if _, err := v.runGitLocked(ctx, "init"); err != nil {
 		return err
 	}

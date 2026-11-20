@@ -324,6 +324,7 @@ type TaskEventRecord struct {
 type TaskFilter struct {
 	ViewerAgentID string
 	ViewerTeamID  string
+	TeamID        string
 	Status        string
 	AssigneeID    string
 	GoalID        string
@@ -331,6 +332,31 @@ type TaskFilter struct {
 	Limit         int
 	BeforeTS      *int64
 	BeforeID      string
+}
+
+// AgentFilter scopes paginated agent queries with optional filters and slug cursor.
+type AgentFilter struct {
+	TeamID    string
+	Template  string
+	Status    string
+	Query     string
+	AfterSlug string
+	Limit     int
+}
+
+// TeamSummaryRecord pairs a TeamRecord with its total agent count.
+type TeamSummaryRecord struct {
+	TeamRecord
+	AgentCount int
+}
+
+// GoalRecord represents a row in the goals table.
+type GoalRecord struct {
+	ID          domain.ID
+	Title       string
+	Description string
+	Status      string
+	CreatedAt   int64
 }
 
 // RoutineStateRecord represents a row in routine_state.

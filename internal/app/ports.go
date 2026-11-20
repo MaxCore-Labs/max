@@ -98,6 +98,14 @@ type Reader interface {
 	GetRoutineState(ctx context.Context, slug string) (RoutineStateRecord, bool, error)
 	ListDueHeartbeatAgents(ctx context.Context, nowMs int64, limit int) ([]DueHeartbeatAgent, error)
 	HasHeartbeatWork(ctx context.Context, agentID domain.ID, lastRunAt *int64) (bool, error)
+	ListRunsFiltered(ctx context.Context, agentID, status string, sinceMs *int64, limit int, beforeTS *int64, beforeID string) ([]RunRecord, error)
+	ListAgentsPage(ctx context.Context, f AgentFilter) ([]AgentRecord, error)
+	ListTeamsPage(ctx context.Context, afterSlug string, limit int) ([]TeamSummaryRecord, error)
+	CountAgentsByTeam(ctx context.Context, teamID domain.ID) (int, error)
+	GetGoal(ctx context.Context, id domain.ID) (GoalRecord, bool, error)
+	ListGoalsPage(ctx context.Context, status string, limit int, beforeTS *int64, beforeID string) ([]GoalRecord, error)
+	ListTaskEventsPage(ctx context.Context, taskID domain.ID, limit int, afterTS *int64, afterID string) ([]TaskEventRecord, error)
+	ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]RunRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -119,6 +127,7 @@ type Tx interface {
 	SetConversationWaitingFor(ctx context.Context, convID domain.ID, waitingFor *string) error
 	UpdateConversationAfterRun(ctx context.Context, convID domain.ID, sessionsJSON string, lastEngine *string, addTurns int) error
 	InsertTask(ctx context.Context, tk TaskRecord) error
+	InsertGoal(ctx context.Context, g GoalRecord) error
 	ClearTaskCheckout(ctx context.Context, runID domain.ID, updatedAt int64) error
 	BlockTask(ctx context.Context, taskID domain.ID, reason string, updatedAt int64) error
 	SetAgentActiveRun(ctx context.Context, agentID domain.ID, runID *domain.ID) error
@@ -173,7 +182,6 @@ type Tx interface {
 	UpdateTaskIdleRuns(ctx context.Context, taskID domain.ID, idleRuns int, updatedAt int64) error
 	InsertTaskEvent(ctx context.Context, ev TaskEventRecord) error
 	ExpirePendingApprovalsByTasks(ctx context.Context, taskIDs []domain.ID, nowMs int64) (int, error)
-	ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]RunRecord, error)
 	UpsertRoutineState(ctx context.Context, st RoutineStateRecord) error
 	SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error
 }

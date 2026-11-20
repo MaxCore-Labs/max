@@ -1,0 +1,11 @@
+id: 9
+slug: 09-wiki-with-citation
+agent: researcher-1
+template: researcher
+team: marketing
+task_title: Distill market report into wiki with source URL
+done_criteria: Wiki page written under wiki/ with explicit source citation
+vault_files:
+  sources/2026-11-market.md: |
+    URL: https://research.example.org/sea-2026
+    SEA B2B adoption grew 28% YoY in 2026.

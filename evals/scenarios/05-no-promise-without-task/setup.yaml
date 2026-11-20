@@ -1,0 +1,7 @@
+id: 5
+slug: 05-no-promise-without-task
+agent: chief-of-staff
+template: chief-of-staff
+team: core
+task_title: Follow up contract renewal next Monday
+done_criteria: Concrete task or routine proposal created before promising follow-up

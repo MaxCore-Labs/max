@@ -111,7 +111,57 @@ export const vi: Record<string, string> = {
 	'system.last_engine_err': 'Phải giữ ít nhất 1 engine đang bật.',
 	'system.login_hint': 'Chưa đăng nhập. Chạy lệnh: {cmd}',
 	'system.enabled': 'Đang bật',
-	'system.disabled': 'Đã tắt'
+	'system.disabled': 'Đã tắt',
+
+	// Agents & Teams (P2.14)
+	'agents.title': 'Đội ngũ Agent',
+	'agents.col.name': 'Agent',
+	'agents.col.template': 'Mẫu vai trò',
+	'agents.col.engines': 'CLI ưu tiên',
+	'agents.col.status': 'Trạng thái',
+	'agents.search_placeholder': 'Tìm theo tên hoặc slug…',
+	'agents.all_teams': 'Tất cả team',
+	'agents.all_templates': 'Tất cả mẫu',
+	'agents.all_statuses': 'Mọi trạng thái',
+	'agents.bulk_create': 'Tạo hàng loạt',
+	'agents.create_one': 'Tạo từ mẫu',
+	'agents.teams_heading': 'Cây Team',
+	'agents.pause': 'Tạm dừng',
+	'agents.resume': 'Tiếp tục',
+	'agents.wake': 'Đánh thức ngay',
+	'agents.instructions': 'Chỉ dẫn vai trò',
+	'agents.notes': 'Ghi chú làm việc',
+	'agents.recent_runs': 'Lượt chạy gần đây',
+	'agents.engine_picker': 'Chọn CLI & Model theo thứ tự ưu tiên',
+	'agents.ungated_title': 'Cảnh báo cô lập Engine',
+	'agents.ungated_body':
+		'Vai trò này tiếp xúc nội dung nhạy cảm nhưng engine đã chọn ở mức cô lập 2/3 (có shell, không có cổng chặn trước từng lệnh). Bạn có chắc chắn mở khoá allowUngatedEngine không?',
+	'agents.ungated_confirm': 'Tôi hiểu rủi ro, mở khoá',
+	'agents.bulk_paste_label': 'Dán danh sách thực thể (mỗi dòng 1 agent, phân tách bằng dấu phẩy)',
+	'agents.bulk_preview': 'Xem trước ({count} slug)',
+	'agents.bulk_missing': 'Thiếu tham số: {param}',
+
+	// Tasks, Activity, Routines (P2.15)
+	'nav.routines': 'Lịch định kỳ',
+	'tasks.title': 'Bảng công việc',
+	'tasks.new': 'Tạo việc mới',
+	'tasks.blocked.dependency': 'chờ phụ thuộc',
+	'tasks.blocked.stalled': 'không tiến triển',
+	'tasks.blocked.error': 'lỗi',
+	'tasks.blocked.needs_owner': 'cần bạn',
+	'tasks.thread': 'Luồng trao đổi',
+	'tasks.subtasks': 'Cây việc con',
+	'tasks.comment_placeholder': 'Thêm bình luận vào việc này…',
+	'activity.title': 'Hoạt động hệ thống',
+	'activity.range_label': 'Khoảng thời gian',
+	'activity.range.1h': '1 giờ qua',
+	'activity.range.24h': '24 giờ qua',
+	'activity.range.7d': '7 ngày qua',
+	'activity.range.30d': '30 ngày qua',
+	'routines.title': 'Lịch định kỳ (Routines)',
+	'routines.new': 'Tạo routine',
+	'routines.run_now': 'Chạy ngay',
+	'routines.external_label': 'Đọc nội dung người ngoài (email, form, webhook)'
 };
 
 export function t(key: string, params?: Record<string, string | number>): string {

@@ -202,6 +202,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: since
+          in: query
+          schema:
+            type: integer
+            format: int64
       responses:
         "200":
           description: Paginated runs
@@ -504,6 +509,619 @@ paths:
               schema:
                 type: string
 
+  /api/v1/agents:
+    get:
+      operationId: listAgents
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: team
+          in: query
+          schema:
+            type: string
+        - name: template
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+    post:
+      operationId: createAgentFromTemplate
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRequest"
+      responses:
+        "201":
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDetail"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "409":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/agents/bulk:
+    post:
+      operationId: createAgentsBulk
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentsBulkRequest"
+      responses:
+        "200":
+          description: Bulk instantiation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAgentsBulkResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/agents/{agentId}:
+    get:
+      operationId: getAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDetail"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+    patch:
+      operationId: updateAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentRequest"
+      responses:
+        "200":
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDetail"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+        "409":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/agents/{agentId}/pause:
+    post:
+      operationId: pauseAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "200":
+          description: Agent paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/agents/{agentId}/resume:
+    post:
+      operationId: resumeAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "200":
+          description: Agent resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/agents/{agentId}/wake:
+    post:
+      operationId: wakeAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WakeAgentRequest"
+      responses:
+        "202":
+          description: Wakeup enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WakeAgentResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/agents/{agentId}/runs:
+    get:
+      operationId: listAgentRuns
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated agent runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/agents/{agentId}/notes:
+    get:
+      operationId: getAgentNotes
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent working notes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentNotesResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/teams:
+    get:
+      operationId: listTeams
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Paginated teams
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/teams/{teamId}:
+    get:
+      operationId: getTeam
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+    patch:
+      operationId: updateTeam
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTeamRequest"
+      responses:
+        "200":
+          description: Team updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/templates:
+    get:
+      operationId: listTemplates
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Role templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/goals:
+    get:
+      operationId: listGoals
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated goals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+    post:
+      operationId: createGoal
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGoalRequest"
+      responses:
+        "201":
+          description: Goal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/tasks:
+    get:
+      operationId: listTasks
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: assigneeId
+          in: query
+          schema:
+            type: string
+        - name: teamId
+          in: query
+          schema:
+            type: string
+        - name: goalId
+          in: query
+          schema:
+            type: string
+        - name: rootId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+    post:
+      operationId: createTask
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/tasks/{taskId}:
+    get:
+      operationId: getTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+    patch:
+      operationId: updateTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskRequest"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/tasks/{taskId}/tree:
+    get:
+      operationId: getTaskTree
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Subtask tree up to 5 levels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskTreeNode"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/tasks/{taskId}/comments:
+    post:
+      operationId: commentTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentTaskRequest"
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskEvent"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/tasks/{taskId}/events:
+    get:
+      operationId: listTaskEvents
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Paginated task events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskEventListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/routines:
+    get:
+      operationId: listRoutines
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Paginated routines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoutineListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/routines/{slug}:
+    put:
+      operationId: upsertRoutine
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertRoutineRequest"
+      responses:
+        "200":
+          description: Routine saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Routine"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/routines/{slug}/enabled:
+    post:
+      operationId: setRoutineEnabled
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetRoutineEnabledRequest"
+      responses:
+        "200":
+          description: Routine enabled state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Routine"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/routines/{slug}/run:
+    post:
+      operationId: runRoutineNow
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "202":
+          description: Routine triggered immediately
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRoutineNowResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+        "409":
+          $ref: "#/components/responses/ErrorResp"
+
 security:
   - cookieAuth: []
 
@@ -549,6 +1167,12 @@ components:
         error:
           type: string
         code:
+          type: string
+        field:
+          type: string
+        activeRunId:
+          type: string
+        activeTaskId:
           type: string
 
     HealthResponse:
@@ -1085,3 +1709,615 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EngineSettingItem"
+
+    Agent:
+      type: object
+      required: [id, slug, name, teamId, engines, models, autonomy, web, browser, shell, skills, allowUngatedEngine, scopeViolations, status, ready]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        templateSlug:
+          type: string
+          nullable: true
+        teamId:
+          type: string
+        managerAgentId:
+          type: string
+          nullable: true
+        engines:
+          type: array
+          items:
+            type: string
+        models:
+          type: object
+          additionalProperties:
+            type: string
+        allowUngatedEngine:
+          type: boolean
+        scopeViolations:
+          type: integer
+        autonomy:
+          type: string
+        web:
+          type: boolean
+        browser:
+          type: string
+        shell:
+          type: boolean
+        skills:
+          type: array
+          items:
+            type: string
+        quotaTokensDay:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+        ready:
+          type: boolean
+        activeRunId:
+          type: string
+          nullable: true
+        lastRunAt:
+          type: integer
+          format: int64
+          nullable: true
+
+    AgentDetail:
+      allOf:
+        - $ref: "#/components/schemas/Agent"
+        - type: object
+          required: [body, sensitive]
+          properties:
+            teamSlug:
+              type: string
+            managerSlug:
+              type: string
+            heartbeat:
+              type: string
+            sensitive:
+              type: boolean
+            params:
+              type: object
+              additionalProperties: true
+            body:
+              type: string
+
+    AgentListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agent"
+        nextCursor:
+          type: string
+          nullable: true
+
+    CreateAgentRequest:
+      type: object
+      required: [template, slug, team]
+      properties:
+        template:
+          type: string
+        slug:
+          type: string
+        team:
+          type: string
+        params:
+          type: object
+          additionalProperties: true
+
+    CreateAgentsBulkRequest:
+      type: object
+      required: [template, team, rows]
+      properties:
+        template:
+          type: string
+        team:
+          type: string
+        slugPrefix:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    BulkProblem:
+      type: object
+      required: [slug, path, message]
+      properties:
+        slug:
+          type: string
+        path:
+          type: string
+        message:
+          type: string
+
+    CreateAgentsBulkResponse:
+      type: object
+      required: [created, problems]
+      properties:
+        created:
+          type: array
+          items:
+            type: string
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkProblem"
+
+    UpdateAgentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        team:
+          type: string
+        manager:
+          type: string
+        engines:
+          type: array
+          items:
+            type: string
+        models:
+          type: object
+          additionalProperties:
+            type: string
+        autonomy:
+          type: string
+        web:
+          type: boolean
+        browser:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        quotaTokensDay:
+          type: integer
+          format: int64
+          nullable: true
+        heartbeat:
+          type: string
+        sensitive:
+          type: boolean
+        allowUngatedEngine:
+          type: boolean
+        body:
+          type: string
+
+    WakeAgentRequest:
+      type: object
+      properties:
+        message:
+          type: string
+
+    WakeAgentResponse:
+      type: object
+      required: [wakeupId]
+      properties:
+        wakeupId:
+          type: string
+
+    AgentNotesResponse:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    TeamMandate:
+      type: object
+      required: [outcome, measures]
+      properties:
+        outcome:
+          type: string
+        measures:
+          type: array
+          items:
+            type: string
+
+    Team:
+      type: object
+      required: [id, slug, name, mandate, maxRunning, running, status, agentCount]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        mandate:
+          $ref: "#/components/schemas/TeamMandate"
+        maxRunning:
+          type: integer
+        running:
+          type: integer
+        quotaTokensDay:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+        agentCount:
+          type: integer
+        body:
+          type: string
+
+    TeamListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Team"
+        nextCursor:
+          type: string
+          nullable: true
+
+    UpdateTeamRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        mandate:
+          $ref: "#/components/schemas/TeamMandate"
+        maxRunning:
+          type: integer
+        quotaTokensDay:
+          type: integer
+          format: int64
+          nullable: true
+        body:
+          type: string
+
+    RoleTemplate:
+      type: object
+      required: [slug, name, engines, autonomy, web, browser, sensitive, requiredParams]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        engines:
+          type: array
+          items:
+            type: string
+        autonomy:
+          type: string
+        web:
+          type: boolean
+        browser:
+          type: string
+        sensitive:
+          type: boolean
+        requiredParams:
+          type: array
+          items:
+            type: string
+        paramDefaults:
+          type: object
+          additionalProperties: true
+
+    TemplateListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoleTemplate"
+        nextCursor:
+          type: string
+          nullable: true
+
+    Goal:
+      type: object
+      required: [id, title, description, status, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: integer
+          format: int64
+
+    GoalListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Goal"
+        nextCursor:
+          type: string
+          nullable: true
+
+    CreateGoalRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+
+    Task:
+      type: object
+      required: [id, rootId, rootOrigin, depth, title, description, doneCriteria, status, needsReview, reviewRounds, idleRuns, blockedBy, artifacts, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        goalId:
+          type: string
+          nullable: true
+        parentId:
+          type: string
+          nullable: true
+        rootId:
+          type: string
+        rootOrigin:
+          type: string
+        depth:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        doneCriteria:
+          type: string
+        status:
+          type: string
+        blockedReason:
+          type: string
+          nullable: true
+        assigneeAgentId:
+          type: string
+          nullable: true
+        createdByAgent:
+          type: string
+          nullable: true
+        checkoutRunId:
+          type: string
+          nullable: true
+        needsReview:
+          type: boolean
+        reviewerAgentId:
+          type: string
+          nullable: true
+        reviewRounds:
+          type: integer
+        idleRuns:
+          type: integer
+        dueAt:
+          type: integer
+          format: int64
+          nullable: true
+        blockedBy:
+          type: array
+          items:
+            type: string
+        artifacts:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+
+    TaskListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        nextCursor:
+          type: string
+          nullable: true
+
+    CreateTaskRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        doneCriteria:
+          type: string
+        goalId:
+          type: string
+        parentId:
+          type: string
+        assigneeAgentId:
+          type: string
+        blockedBy:
+          type: array
+          items:
+            type: string
+        needsReview:
+          type: boolean
+        dueAt:
+          type: integer
+          format: int64
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        status:
+          type: string
+        blockedReason:
+          type: string
+        assigneeAgentId:
+          type: string
+
+    TaskTreeNode:
+      type: object
+      required: [task, children]
+      properties:
+        task:
+          $ref: "#/components/schemas/Task"
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskTreeNode"
+
+    CommentTaskRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+
+    TaskEvent:
+      type: object
+      required: [id, taskId, kind, actorKind, body, createdAt]
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        kind:
+          type: string
+        actorKind:
+          type: string
+        actorId:
+          type: string
+          nullable: true
+        targetAgentId:
+          type: string
+          nullable: true
+        body:
+          type: string
+        createdAt:
+          type: integer
+          format: int64
+
+    TaskEventListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskEvent"
+        nextCursor:
+          type: string
+          nullable: true
+
+    Routine:
+      type: object
+      required: [slug, agent, enabled, origin, timeoutMin, catchUp, connections, body, consecutiveFailures, autoDisabled]
+      properties:
+        slug:
+          type: string
+        agent:
+          type: string
+        schedule:
+          type: string
+        at:
+          type: string
+        enabled:
+          type: boolean
+        origin:
+          type: string
+        timeoutMin:
+          type: integer
+        notify:
+          type: string
+        catchUp:
+          type: string
+        connections:
+          type: array
+          items:
+            type: string
+        body:
+          type: string
+        lastFiredAt:
+          type: integer
+          format: int64
+          nullable: true
+        activeTaskId:
+          type: string
+          nullable: true
+        consecutiveFailures:
+          type: integer
+        autoDisabled:
+          type: boolean
+        parseError:
+          type: string
+
+    RoutineListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Routine"
+        nextCursor:
+          type: string
+          nullable: true
+
+    UpsertRoutineRequest:
+      type: object
+      required: [agent]
+      properties:
+        agent:
+          type: string
+        schedule:
+          type: string
+        at:
+          type: string
+        enabled:
+          type: boolean
+        origin:
+          type: string
+        timeoutMin:
+          type: integer
+        notify:
+          type: string
+        catchUp:
+          type: string
+        connections:
+          type: array
+          items:
+            type: string
+        body:
+          type: string
+
+    SetRoutineEnabledRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+
+    RunRoutineNowResponse:
+      type: object
+      required: [taskId, wakeupId]
+      properties:
+        taskId:
+          type: string
+        wakeupId:
+          type: string

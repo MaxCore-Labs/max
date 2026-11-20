@@ -288,6 +288,17 @@ func TestServeRecoversOnBoot(t *testing.T) {
 		}, &bytes.Buffer{}, &bytes.Buffer{})
 	}()
 
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, hErr := http.Get("http://" + listenAddr + "/healthz")
+		if hErr == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	time.Sleep(600 * time.Millisecond)
 	cancel()
 	<-doneCh

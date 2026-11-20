@@ -230,12 +230,12 @@ func (t *sqliteTx) ExpirePendingApprovalsByTasks(ctx context.Context, taskIDs []
 	return int(n), nil
 }
 
-func (t *sqliteTx) ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]app.RunRecord, error) {
+func (r *sqliteReader) ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]app.RunRecord, error) {
 	if len(taskIDs) == 0 {
 		return nil, nil
 	}
 	inClause, args := buildPlaceholders(taskIDs)
-	rows, err := t.q.QueryContext(ctx, `
+	rows, err := r.q.QueryContext(ctx, `
 		SELECT id, agent_id, conversation_id, task_id, status, priority, engine, model,
 		       pgid, attempt, turns, input_tokens, output_tokens, cached_read_tokens,
 		       thought_tokens, notional_microusd, touched_paths, error, summary, vault_commit,

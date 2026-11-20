@@ -135,6 +135,8 @@ func (s *Service) MessageAgent(ctx context.Context, c Caller, to, body string) R
 	}); err != nil {
 		if errors.Is(err, domain.ErrHops) {
 			s.reportHopsCapInbox(ctx, c, hops)
+		} else if errors.Is(err, domain.ErrPairRate) {
+			_ = s.ensureCoord().Escalate(ctx, *taskIDPtr, c.AgentID, err.Error())
 		}
 		return Result{Text: fmt.Sprintf("message_agent blocked by coordination rule: %v", err), IsError: true}
 	}

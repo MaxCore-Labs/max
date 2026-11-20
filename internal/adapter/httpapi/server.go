@@ -12,9 +12,12 @@ import (
 	"max/internal/adapter/httpapi/gen"
 	"max/internal/app"
 	"max/internal/app/actor"
+	"max/internal/app/agentsync"
 	"max/internal/app/approvals"
 	"max/internal/app/chat"
+	"max/internal/app/coord"
 	"max/internal/app/limits"
+	"max/internal/app/scheduler"
 	"max/internal/domain"
 	"max/internal/platform"
 )
@@ -22,7 +25,11 @@ import (
 // Deps bundles dependencies injected into the HTTP API server.
 type Deps struct {
 	Store     app.Store
+	Vault     app.Vault
+	AgentSync *agentsync.Service
 	Actors    *actor.Service
+	Coord     *coord.Service
+	Scheduler *scheduler.Scheduler
 	Approvals *approvals.Service
 	Chat      *chat.Service
 	Slots     *limits.Slots

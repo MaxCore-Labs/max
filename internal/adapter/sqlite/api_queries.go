@@ -101,6 +101,10 @@ func (r *sqliteReader) ListInboxPage(ctx context.Context, unreadOnly bool, limit
 }
 
 func (r *sqliteReader) ListRunsPage(ctx context.Context, agentID, status string, limit int, beforeTS *int64, beforeID string) ([]app.RunRecord, error) {
+	return r.ListRunsFiltered(ctx, agentID, status, nil, limit, beforeTS, beforeID)
+}
+
+func (r *sqliteReader) ListRunsFiltered(ctx context.Context, agentID, status string, sinceMs *int64, limit int, beforeTS *int64, beforeID string) ([]app.RunRecord, error) {
 	query := `SELECT id, agent_id, conversation_id, task_id, status, priority, engine, model,
 	                 pgid, attempt, turns, input_tokens, output_tokens, cached_read_tokens,
 	                 thought_tokens, notional_microusd, touched_paths, error, summary, vault_commit,
@@ -114,6 +118,10 @@ func (r *sqliteReader) ListRunsPage(ctx context.Context, agentID, status string,
 	if status != "" {
 		query += ` AND status = ?`
 		args = append(args, status)
+	}
+	if sinceMs != nil {
+		query += ` AND started_at >= ?`
+		args = append(args, *sinceMs)
 	}
 	if beforeTS != nil {
 		query += ` AND (started_at < ? OR (started_at = ? AND id < ?))`

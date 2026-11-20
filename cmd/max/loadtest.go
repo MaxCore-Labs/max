@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -31,7 +30,7 @@ import (
 )
 
 type loadtestFlags struct {
-	dataDir, fakecliBin                 string
+	dataDir, fakecliBin, scenario       string
 	agents, wakeups, slots              int
 	sleepMinMS, sleepMaxMS, chaosRounds int
 	killEvery                           time.Duration
@@ -42,6 +41,7 @@ func runLoadtest(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("loadtest", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var cfg loadtestFlags
+	fs.StringVar(&cfg.scenario, "scenario", "basic", "loadtest scenario (basic|multi)")
 	fs.StringVar(&cfg.dataDir, "data-dir", "", "SQLite directory (defaults to temporary directory)")
 	fs.StringVar(&cfg.fakecliBin, "fakecli-bin", "", "prebuilt fakecli binary path")
 	fs.IntVar(&cfg.agents, "agents", 200, "number of agents")
@@ -121,7 +121,7 @@ func runChaosSupervisor(ctx context.Context, cfg loadtestFlags, stdout, stderr i
 			break
 		}
 		wArgs := []string{
-			"loadtest", "--worker", "--data-dir", cfg.dataDir, "--fakecli-bin", cfg.fakecliBin,
+			"loadtest", "--worker", "--scenario", cfg.scenario, "--data-dir", cfg.dataDir, "--fakecli-bin", cfg.fakecliBin,
 			"--agents", strconv.Itoa(cfg.agents), "--wakeups", strconv.Itoa(cfg.wakeups),
 			"--slots", strconv.Itoa(cfg.slots),
 			"--sleep-min-ms", strconv.Itoa(cfg.sleepMinMS), "--sleep-max-ms", strconv.Itoa(cfg.sleepMaxMS),
@@ -165,6 +165,9 @@ func ensureLoadtestSeeded(ctx context.Context, cfg loadtestFlags) error {
 	}
 	if total > 0 {
 		return nil
+	}
+	if cfg.scenario == "multi" {
+		return seedMultiLoadtest(ctx, st, cfg)
 	}
 
 	numTeams := max(10, cfg.slots*2)
@@ -379,17 +382,4 @@ func runLoadtestWorker(ctx context.Context, cfg loadtestFlags, stdout, stderr io
 		return 1
 	}
 	return 0
-}
-
-func calcPercentiles(durs []time.Duration) (p50, p95, p99 time.Duration) {
-	if len(durs) == 0 {
-		return 0, 0, 0
-	}
-	cp := slices.Clone(durs)
-	slices.Sort(cp)
-	at := func(q float64) time.Duration {
-		idx := int(float64(len(cp)-1) * q)
-		return cp[idx]
-	}
-	return at(0.50), at(0.95), at(0.99)
 }
