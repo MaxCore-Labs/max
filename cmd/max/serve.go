@@ -316,7 +316,11 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 
 	handler, err := httpapi.New(httpapi.Deps{
 		Store:     st,
+		Vault:     vault,
+		AgentSync: syncSvc,
 		Actors:    actors,
+		Coord:     coordSvc,
+		Scheduler: sched,
 		Approvals: apprSvc,
 		Chat:      chatSvc,
 		Slots:     slots,

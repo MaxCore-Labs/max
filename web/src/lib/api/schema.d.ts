@@ -388,6 +388,342 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgents"];
+        put?: never;
+        post: operations["createAgentFromTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createAgentsBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAgent"];
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pauseAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/wake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["wakeAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentNotes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTeams"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{teamId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateTeam"];
+        trace?: never;
+    };
+    "/api/v1/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listGoals"];
+        put?: never;
+        post: operations["createGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTasks"];
+        put?: never;
+        post: operations["createTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateTask"];
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTaskTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commentTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTaskEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/routines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRoutines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/routines/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["upsertRoutine"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/routines/{slug}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["setRoutineEnabled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/routines/{slug}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["runRoutineNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -395,6 +731,9 @@ export interface components {
         ErrorResponse: {
             error: string;
             code?: string;
+            field?: string;
+            activeRunId?: string;
+            activeTaskId?: string;
         };
         HealthResponse: {
             ok: boolean;
@@ -635,6 +974,274 @@ export interface components {
         UpdateSettingsRequest: {
             defaultEngine?: string;
             engines?: components["schemas"]["EngineSettingItem"][];
+        };
+        Agent: {
+            id: string;
+            slug: string;
+            name: string;
+            templateSlug?: string | null;
+            teamId: string;
+            managerAgentId?: string | null;
+            engines: string[];
+            models: {
+                [key: string]: string;
+            };
+            allowUngatedEngine: boolean;
+            scopeViolations: number;
+            autonomy: string;
+            web: boolean;
+            browser: string;
+            shell: boolean;
+            skills: string[];
+            /** Format: int64 */
+            quotaTokensDay?: number | null;
+            status: string;
+            ready: boolean;
+            activeRunId?: string | null;
+            /** Format: int64 */
+            lastRunAt?: number | null;
+        };
+        AgentDetail: components["schemas"]["Agent"] & {
+            teamSlug?: string;
+            managerSlug?: string;
+            heartbeat?: string;
+            sensitive: boolean;
+            params?: {
+                [key: string]: unknown;
+            };
+            body: string;
+        };
+        AgentListResponse: {
+            items: components["schemas"]["Agent"][];
+            nextCursor?: string | null;
+        };
+        CreateAgentRequest: {
+            template: string;
+            slug: string;
+            team: string;
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        CreateAgentsBulkRequest: {
+            template: string;
+            team: string;
+            slugPrefix?: string;
+            rows: {
+                [key: string]: unknown;
+            }[];
+        };
+        BulkProblem: {
+            slug: string;
+            path: string;
+            message: string;
+        };
+        CreateAgentsBulkResponse: {
+            created: string[];
+            problems: components["schemas"]["BulkProblem"][];
+        };
+        UpdateAgentRequest: {
+            name?: string;
+            team?: string;
+            manager?: string;
+            engines?: string[];
+            models?: {
+                [key: string]: string;
+            };
+            autonomy?: string;
+            web?: boolean;
+            browser?: string;
+            skills?: string[];
+            /** Format: int64 */
+            quotaTokensDay?: number | null;
+            heartbeat?: string;
+            sensitive?: boolean;
+            allowUngatedEngine?: boolean;
+            body?: string;
+        };
+        WakeAgentRequest: {
+            message?: string;
+        };
+        WakeAgentResponse: {
+            wakeupId: string;
+        };
+        AgentNotesResponse: {
+            content: string;
+        };
+        TeamMandate: {
+            outcome: string;
+            measures: string[];
+        };
+        Team: {
+            id: string;
+            slug: string;
+            name: string;
+            mandate: components["schemas"]["TeamMandate"];
+            maxRunning: number;
+            running: number;
+            /** Format: int64 */
+            quotaTokensDay?: number | null;
+            status: string;
+            agentCount: number;
+            body?: string;
+        };
+        TeamListResponse: {
+            items: components["schemas"]["Team"][];
+            nextCursor?: string | null;
+        };
+        UpdateTeamRequest: {
+            name?: string;
+            mandate?: components["schemas"]["TeamMandate"];
+            maxRunning?: number;
+            /** Format: int64 */
+            quotaTokensDay?: number | null;
+            body?: string;
+        };
+        RoleTemplate: {
+            slug: string;
+            name: string;
+            engines: string[];
+            autonomy: string;
+            web: boolean;
+            browser: string;
+            sensitive: boolean;
+            requiredParams: string[];
+            paramDefaults?: {
+                [key: string]: unknown;
+            };
+        };
+        TemplateListResponse: {
+            items: components["schemas"]["RoleTemplate"][];
+            nextCursor?: string | null;
+        };
+        Goal: {
+            id: string;
+            title: string;
+            description: string;
+            status: string;
+            /** Format: int64 */
+            createdAt: number;
+        };
+        GoalListResponse: {
+            items: components["schemas"]["Goal"][];
+            nextCursor?: string | null;
+        };
+        CreateGoalRequest: {
+            title: string;
+            description?: string;
+        };
+        Task: {
+            id: string;
+            goalId?: string | null;
+            parentId?: string | null;
+            rootId: string;
+            rootOrigin: string;
+            depth: number;
+            title: string;
+            description: string;
+            doneCriteria: string;
+            status: string;
+            blockedReason?: string | null;
+            assigneeAgentId?: string | null;
+            createdByAgent?: string | null;
+            checkoutRunId?: string | null;
+            needsReview: boolean;
+            reviewerAgentId?: string | null;
+            reviewRounds: number;
+            idleRuns: number;
+            /** Format: int64 */
+            dueAt?: number | null;
+            blockedBy: string[];
+            artifacts: string[];
+            /** Format: int64 */
+            createdAt: number;
+            /** Format: int64 */
+            updatedAt: number;
+        };
+        TaskListResponse: {
+            items: components["schemas"]["Task"][];
+            nextCursor?: string | null;
+        };
+        CreateTaskRequest: {
+            title: string;
+            description?: string;
+            doneCriteria?: string;
+            goalId?: string;
+            parentId?: string;
+            assigneeAgentId?: string;
+            blockedBy?: string[];
+            needsReview?: boolean;
+            /** Format: int64 */
+            dueAt?: number;
+        };
+        UpdateTaskRequest: {
+            status?: string;
+            blockedReason?: string;
+            assigneeAgentId?: string;
+        };
+        TaskTreeNode: {
+            task: components["schemas"]["Task"];
+            children: components["schemas"]["TaskTreeNode"][];
+        };
+        CommentTaskRequest: {
+            body: string;
+        };
+        TaskEvent: {
+            id: string;
+            taskId: string;
+            kind: string;
+            actorKind: string;
+            actorId?: string | null;
+            targetAgentId?: string | null;
+            body: string;
+            /** Format: int64 */
+            createdAt: number;
+        };
+        TaskEventListResponse: {
+            items: components["schemas"]["TaskEvent"][];
+            nextCursor?: string | null;
+        };
+        Routine: {
+            slug: string;
+            agent: string;
+            schedule?: string;
+            at?: string;
+            enabled: boolean;
+            origin: string;
+            timeoutMin: number;
+            notify?: string;
+            catchUp: string;
+            connections: string[];
+            body: string;
+            /** Format: int64 */
+            lastFiredAt?: number | null;
+            activeTaskId?: string | null;
+            consecutiveFailures: number;
+            autoDisabled: boolean;
+            parseError?: string;
+        };
+        RoutineListResponse: {
+            items: components["schemas"]["Routine"][];
+            nextCursor?: string | null;
+        };
+        UpsertRoutineRequest: {
+            agent: string;
+            schedule?: string;
+            at?: string;
+            enabled?: boolean;
+            origin?: string;
+            timeoutMin?: number;
+            notify?: string;
+            catchUp?: string;
+            connections?: string[];
+            body?: string;
+        };
+        SetRoutineEnabledRequest: {
+            enabled: boolean;
+        };
+        RunRoutineNowResponse: {
+            taskId: string;
+            wakeupId: string;
         };
     };
     responses: {
@@ -924,6 +1531,7 @@ export interface operations {
                 cursor?: components["parameters"]["CursorParam"];
                 agentId?: string;
                 status?: string;
+                since?: number;
             };
             header?: never;
             path?: never;
@@ -1324,6 +1932,725 @@ export interface operations {
                     "text/event-stream": string;
                 };
             };
+        };
+    };
+    listAgents: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+                team?: string;
+                template?: string;
+                status?: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    createAgentFromTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            409: components["responses"]["ErrorResp"];
+        };
+    };
+    createAgentsBulk: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentsBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk instantiation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateAgentsBulkResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    updateAgent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+            409: components["responses"]["ErrorResp"];
+        };
+    };
+    pauseAgent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent paused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    resumeAgent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent resumed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    wakeAgent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WakeAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Wakeup enqueued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WakeAgentResponse"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    listAgentRuns: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+                status?: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated agent runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    getAgentNotes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent working notes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentNotesResponse"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    listTeams: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated teams */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    getTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Team detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    updateTeam: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeamRequest"];
+            };
+        };
+        responses: {
+            /** @description Team updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    listTemplates: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role templates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    listGoals: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated goals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    createGoal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGoalRequest"];
+            };
+        };
+        responses: {
+            /** @description Goal created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+                status?: string;
+                assigneeId?: string;
+                teamId?: string;
+                goalId?: string;
+                rootId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated tasks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    createTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Task created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    updateTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Task updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    getTaskTree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subtask tree up to 5 levels */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskTreeNode"];
+                };
+            };
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    commentTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Comment created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskEvent"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    listTaskEvents: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+            };
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated task events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskEventListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    listRoutines: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["LimitParam"];
+                cursor?: components["parameters"]["CursorParam"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated routines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutineListResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    upsertRoutine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertRoutineRequest"];
+            };
+        };
+        responses: {
+            /** @description Routine saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Routine"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    setRoutineEnabled: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRoutineEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description Routine enabled state updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Routine"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+        };
+    };
+    runRoutineNow: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Routine triggered immediately */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunRoutineNowResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+            409: components["responses"]["ErrorResp"];
         };
     };
 }

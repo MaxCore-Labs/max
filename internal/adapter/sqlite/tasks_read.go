@@ -163,6 +163,10 @@ func (r *sqliteReader) ListScopedTasks(ctx context.Context, f app.TaskFilter) ([
 		))`)
 		args = append(args, f.ViewerAgentID, f.ViewerAgentID, f.ViewerAgentID, f.ViewerTeamID)
 	}
+	if f.TeamID != "" {
+		conds = append(conds, `EXISTS (SELECT 1 FROM agents a WHERE a.team_id = ? AND a.id = t.assignee_agent_id)`)
+		args = append(args, f.TeamID)
+	}
 	if f.Status != "" {
 		conds = append(conds, `t.status = ?`)
 		args = append(args, f.Status)

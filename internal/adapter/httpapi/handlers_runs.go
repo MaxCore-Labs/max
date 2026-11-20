@@ -25,7 +25,7 @@ func (s *Server) ListRuns(ctx context.Context, req gen.ListRunsRequestObject) (g
 		status = strings.TrimSpace(*req.Params.Status)
 	}
 	ts, id := parsePageCursor(req.Params.Cursor)
-	rows, err := s.deps.Store.Read().ListRunsPage(ctx, agentID, status, limit+1, ts, id)
+	rows, err := s.deps.Store.Read().ListRunsFiltered(ctx, agentID, status, req.Params.Since, limit+1, ts, id)
 	if err != nil {
 		return nil, err
 	}
