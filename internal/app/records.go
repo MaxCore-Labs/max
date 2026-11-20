@@ -205,6 +205,29 @@ type ApprovalRecord struct {
 	DecidedAt      *int64
 }
 
+// ThreadRecord represents a row in the threads table.
+type ThreadRecord struct {
+	ID                domain.ID
+	AgentID           domain.ID
+	Title             string
+	LearnedThroughMsg *domain.ID
+	LastMsgAt         *int64
+	CreatedAt         int64
+	UpdatedAt         int64
+}
+
+// MessageRecord represents a row in the messages table.
+type MessageRecord struct {
+	ID              domain.ID
+	ThreadID        domain.ID
+	Role            string
+	Content         string
+	AttachmentsJSON string
+	RunID           *domain.ID
+	IdempotencyKey  *string
+	CreatedAt       int64
+}
+
 // UserRecord represents a row in the users table.
 type UserRecord struct {
 	ID           domain.ID

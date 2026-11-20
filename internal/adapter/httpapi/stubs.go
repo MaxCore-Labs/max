@@ -7,31 +7,7 @@ import (
 	"max/internal/adapter/httpapi/gen"
 )
 
-// Stubs below satisfy gen.StrictServerInterface in P1.21 and are replaced with real handlers in P1.22–P1.24.
-
-func (s *Server) ListThreads(context.Context, gen.ListThreadsRequestObject) (gen.ListThreadsResponseObject, error) {
-	return gen.ListThreads200JSONResponse{Items: []gen.Thread{}}, nil
-}
-
-func (s *Server) CreateThread(context.Context, gen.CreateThreadRequestObject) (gen.CreateThreadResponseObject, error) {
-	return gen.CreateThread201JSONResponse{}, nil
-}
-
-func (s *Server) GetThread(context.Context, gen.GetThreadRequestObject) (gen.GetThreadResponseObject, error) {
-	return gen.GetThread404JSONResponse{ErrorRespJSONResponse: gen.ErrorRespJSONResponse{Error: "not found"}}, nil
-}
-
-func (s *Server) ListMessages(context.Context, gen.ListMessagesRequestObject) (gen.ListMessagesResponseObject, error) {
-	return gen.ListMessages200JSONResponse{Items: []gen.Message{}}, nil
-}
-
-func (s *Server) SendMessage(context.Context, gen.SendMessageRequestObject) (gen.SendMessageResponseObject, error) {
-	return gen.SendMessage202JSONResponse{}, nil
-}
-
-func (s *Server) ResetThread(context.Context, gen.ResetThreadRequestObject) (gen.ResetThreadResponseObject, error) {
-	return gen.ResetThread204Response{}, nil
-}
+// Stubs below satisfy gen.StrictServerInterface in P1.21 and are replaced with real handlers in P1.23–P1.24.
 
 func (s *Server) ListRuns(context.Context, gen.ListRunsRequestObject) (gen.ListRunsResponseObject, error) {
 	return gen.ListRuns200JSONResponse{Items: []gen.Run{}}, nil

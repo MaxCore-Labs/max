@@ -7,12 +7,14 @@ import (
 
 	"max/internal/adapter/httpapi/gen"
 	"max/internal/app"
+	"max/internal/app/chat"
 	"max/internal/platform"
 )
 
 // Deps bundles dependencies injected into the HTTP API server.
 type Deps struct {
 	Store  app.Store
+	Chat   *chat.Service
 	Config platform.Config
 	Clock  app.Clock
 	IDs    app.IDGen

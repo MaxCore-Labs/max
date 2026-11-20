@@ -89,6 +89,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ThreadListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
     post:
       operationId: createThread
       parameters:
@@ -147,6 +149,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
     post:
       operationId: sendMessage
       parameters:
@@ -205,6 +209,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RunListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
 
   /api/v1/runs/{runId}:
     get:
@@ -243,6 +249,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RunEventListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
 
   /api/v1/runs/{runId}/cancel:
     post:
@@ -302,6 +310,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApprovalListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
 
   /api/v1/approvals/{approvalId}/decide:
     post:
@@ -352,6 +362,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InboxListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
 
   /api/v1/inbox/{itemId}/read:
     post:
@@ -407,6 +419,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UsageResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
 
   /api/v1/quota:
     get:

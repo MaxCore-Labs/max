@@ -64,6 +64,11 @@ type Reader interface {
 	GetUserByID(ctx context.Context, id domain.ID) (UserRecord, bool, error)
 	GetAuthSession(ctx context.Context, tokenHash string) (AuthSessionRecord, bool, error)
 	ListAllAuthSessionHashes(ctx context.Context) ([]string, error)
+	GetThread(ctx context.Context, id domain.ID) (ThreadRecord, bool, error)
+	ListThreads(ctx context.Context, limit int, beforeUpdatedMs *int64, beforeID string) ([]ThreadRecord, error)
+	GetConversationByThread(ctx context.Context, agentID, threadID domain.ID) (ConversationRecord, bool, error)
+	GetMessageByIdem(ctx context.Context, idemKey string) (MessageRecord, bool, error)
+	ListThreadMessages(ctx context.Context, threadID domain.ID, limit int, beforeCreatedMs *int64, beforeID string) ([]MessageRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -117,6 +122,11 @@ type Tx interface {
 	UpsertOwnerUser(ctx context.Context, u UserRecord) error
 	InsertAuthSession(ctx context.Context, s AuthSessionRecord) error
 	DeleteAuthSession(ctx context.Context, tokenHash string) error
+	InsertThread(ctx context.Context, th ThreadRecord) error
+	TouchThread(ctx context.Context, threadID domain.ID, msgAt int64) error
+	EnsureThreadConversation(ctx context.Context, agentID, threadID, newConvID domain.ID) (domain.ID, error)
+	ResetThreadConversation(ctx context.Context, agentID, threadID domain.ID) error
+	InsertMessage(ctx context.Context, m MessageRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 
