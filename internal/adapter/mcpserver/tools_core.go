@@ -59,6 +59,7 @@ func registerCoreTools(mcpSrv *mcp.Server, svc *tools.Service, caller tools.Call
 	registerCoordTools(mcpSrv, svc, caller)
 	registerMemoryTools(mcpSrv, svc, caller)
 	registerProposeTools(mcpSrv, svc, caller)
+	registerBrowserTools(mcpSrv, svc, caller)
 }
 
 func maybeCap(svc *tools.Service, c tools.Caller, name string, r tools.Result) tools.Result {
@@ -89,6 +90,7 @@ func RegisteredToolNames(_ *tools.Service) []string {
 		"routine_propose",
 		"agent_propose",
 		"instruction_propose",
+		"handoff",
 	}
 }
 

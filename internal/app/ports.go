@@ -79,6 +79,7 @@ type Reader interface {
 	ListRunsPage(ctx context.Context, agentID, status string, limit int, beforeTS *int64, beforeID string) ([]RunRecord, error)
 	ListUsagePage(ctx context.Context, sinceDay string, limit int, offset int) ([]DailyUsageRecord, error)
 	CountQueuedByPriority(ctx context.Context) (map[int]int, error)
+	ListQueuedBacklogStats(ctx context.Context) ([]QueuedBacklogRow, error)
 	ListAuditLogs(ctx context.Context, limit int) ([]AuditLogRecord, error)
 	GetEngineBinary(ctx context.Context, engine domain.EngineName) (EngineBinaryRecord, bool, error)
 	ListTaskBlockers(ctx context.Context, taskID domain.ID) ([]domain.ID, error)
@@ -282,6 +283,11 @@ type Browser interface {
 	Acquire(ctx context.Context, runID domain.ID, prio domain.Priority, wait time.Duration) (endpoint string, err error)
 	Release(ctx context.Context, runID domain.ID) error
 	MCPSpec(endpoint string) MCPServerSpec
+}
+
+// BrowserHandoff starts a loopback human takeover session and parks the conversation waiting on owner (Spec 8.10 & P4.02).
+type BrowserHandoff interface {
+	Handoff(ctx context.Context, agentID, runID, convID domain.ID, reason, origin string) (string, error)
 }
 
 // OutboundInvoker invokes a registered external MCP connection tool outside DB transactions.

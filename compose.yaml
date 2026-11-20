@@ -28,3 +28,18 @@ services:
       - ./data:/data
       - ./vault:/vault
       - ${AGY_HOST_DIR:-./opt-agy}:/opt/agy/bin:ro
+
+  takeover:
+    profiles:
+      - takeover
+    image: ghcr.io/cloakbrowser/cloakbrowser-novnc:latest
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:6080:6080"
+    environment:
+      DISPLAY_WIDTH: "1280"
+      DISPLAY_HEIGHT: "800"
+    volumes:
+      - ./data/browser-owner:/profile

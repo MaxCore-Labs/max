@@ -1109,11 +1109,20 @@ export interface components {
             /** Format: int64 */
             limitedUntil?: number | null;
         };
+        PriorityBacklogItem: {
+            priority: number;
+            count: number;
+            /** Format: int64 */
+            oldestAgeSec: number;
+            reason: string;
+        };
         QueueSummary: {
             total: number;
             byPriority: {
                 [key: string]: number;
             };
+            quotaDelayed?: number;
+            backlog?: components["schemas"]["PriorityBacklogItem"][];
         };
         StatusResponse: {
             engines: components["schemas"]["EngineStatusItem"][];

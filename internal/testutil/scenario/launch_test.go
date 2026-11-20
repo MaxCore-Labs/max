@@ -64,3 +64,24 @@ func TestMonitorSparse24h(t *testing.T) {
 		t.Fatalf("invariant violations in 24h monitor sim: %+v", res.Violations)
 	}
 }
+
+func TestMonitor1000AgentsSoak(t *testing.T) {
+	ctx := context.Background()
+	res, err := scenario.RunMonitor1000SoakSim(ctx, 1000, 14)
+	if err != nil {
+		t.Fatalf("RunMonitor1000SoakSim: %v", err)
+	}
+	t.Logf("1000-agent 14d soak metrics: %+v", res)
+	if res.AgentsCreated != 1000 {
+		t.Fatalf("agentsCreated = %d, want 1000", res.AgentsCreated)
+	}
+	if res.RunsExecuted == 0 {
+		t.Fatal("expected >= 1 heartbeat run executed across 14 simulated days")
+	}
+	if res.OperationalInterventions != 0 {
+		t.Fatalf("operationalInterventions = %d, want 0", res.OperationalInterventions)
+	}
+	if len(res.Violations) > 0 {
+		t.Fatalf("invariant violations (I1-I14): %+v", res.Violations)
+	}
+}

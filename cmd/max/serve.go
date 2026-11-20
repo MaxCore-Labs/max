@@ -291,10 +291,10 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 		Connections: connSvc,
 		Grants:      grantSvc,
 		Approvals:   apprSvc,
-		Chat:      chatSvc,
-		Slots:     slots,
-		Quota:     quota,
-		Engines:   engines,
+		Chat:        chatSvc,
+		Slots:       slots,
+		Quota:       quota,
+		Engines:     engines,
 		CancelRun: func(runID domain.ID) {
 			cancelMu.Lock()
 			fn := runCancels[runID]

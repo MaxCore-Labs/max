@@ -58,13 +58,13 @@ func (f *fakeOutboundTarget) Invoke(ctx context.Context, _ string, _ []byte, too
 }
 
 type gwEnv struct {
-	st      app.Store
-	target  *fakeOutboundTarget
-	conns   *connections.Service
-	grants  *grants.Service
-	ap      *approvals.Service
-	gw      *tools.Gateway
-	caller  tools.Caller
+	st     app.Store
+	target *fakeOutboundTarget
+	conns  *connections.Service
+	grants *grants.Service
+	ap     *approvals.Service
+	gw     *tools.Gateway
+	caller tools.Caller
 }
 
 func setupGatewayEnv(t *testing.T, timeout time.Duration) gwEnv {
