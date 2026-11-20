@@ -37,17 +37,17 @@ type Deps struct {
 	Connections *connections.Service
 	Grants      *grants.Service
 	Approvals   *approvals.Service
-	Chat      *chat.Service
-	Slots     *limits.Slots
-	Quota     *limits.Quota
-	Engines   map[domain.EngineName]app.Engine
-	CancelRun func(runID domain.ID)
-	Bus       *platform.Bus
-	Hub       *Hub
-	StaticFS  fs.FS
-	Config    platform.Config
-	Clock     app.Clock
-	IDs       app.IDGen
+	Chat        *chat.Service
+	Slots       *limits.Slots
+	Quota       *limits.Quota
+	Engines     map[domain.EngineName]app.Engine
+	CancelRun   func(runID domain.ID)
+	Bus         *platform.Bus
+	Hub         *Hub
+	StaticFS    fs.FS
+	Config      platform.Config
+	Clock       app.Clock
+	IDs         app.IDGen
 }
 
 // Server implements gen.StrictServerInterface and owns HTTP/SSE routing.

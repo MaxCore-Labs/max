@@ -25,14 +25,14 @@ import (
 )
 
 type phase3Env struct {
-	st      *sqlite.Store
-	vault   *vaultgit.Vault
-	learn   *learn.Service
-	conns   *connections.Service
-	grants  *grants.Service
-	h       http.Handler
-	cookie  *http.Cookie
-	now     time.Time
+	st     *sqlite.Store
+	vault  *vaultgit.Vault
+	learn  *learn.Service
+	conns  *connections.Service
+	grants *grants.Service
+	h      http.Handler
+	cookie *http.Cookie
+	now    time.Time
 }
 
 type p3Clock struct {

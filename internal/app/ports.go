@@ -79,6 +79,7 @@ type Reader interface {
 	ListRunsPage(ctx context.Context, agentID, status string, limit int, beforeTS *int64, beforeID string) ([]RunRecord, error)
 	ListUsagePage(ctx context.Context, sinceDay string, limit int, offset int) ([]DailyUsageRecord, error)
 	CountQueuedByPriority(ctx context.Context) (map[int]int, error)
+	ListQueuedBacklogStats(ctx context.Context) ([]QueuedBacklogRow, error)
 	ListAuditLogs(ctx context.Context, limit int) ([]AuditLogRecord, error)
 	GetEngineBinary(ctx context.Context, engine domain.EngineName) (EngineBinaryRecord, bool, error)
 	ListTaskBlockers(ctx context.Context, taskID domain.ID) ([]domain.ID, error)

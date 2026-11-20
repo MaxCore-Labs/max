@@ -1869,6 +1869,20 @@ components:
           format: int64
           nullable: true
 
+    PriorityBacklogItem:
+      type: object
+      required: [priority, count, oldestAgeSec, reason]
+      properties:
+        priority:
+          type: integer
+        count:
+          type: integer
+        oldestAgeSec:
+          type: integer
+          format: int64
+        reason:
+          type: string
+
     QueueSummary:
       type: object
       required: [total, byPriority]
@@ -1879,6 +1893,12 @@ components:
           type: object
           additionalProperties:
             type: integer
+        quotaDelayed:
+          type: integer
+        backlog:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriorityBacklogItem"
 
     StatusResponse:
       type: object

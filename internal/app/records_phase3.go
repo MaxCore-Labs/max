@@ -55,3 +55,16 @@ type TOTPRecord struct {
 	FailedAttempts int
 	LockedUntil    *int64
 }
+
+// QueuedBacklogRow summarizes queued wakeup counts, oldest age, and blocking state per priority class.
+type QueuedBacklogRow struct {
+	Priority        int
+	Count           int
+	OldestCreatedAt int64
+	AgentStatus     domain.AgentStatus
+	EngineMask      int
+	CooldownUntil   int64
+	ActiveRunID     *domain.ID
+	TeamRunning     int
+	TeamMaxRunning  int
+}

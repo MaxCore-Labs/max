@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { api, type Schemas } from '#lib/api/client.js';
+	import CapacityPanel from '#lib/components/CapacityPanel.svelte';
 	import ConnectionForm from '#lib/components/ConnectionForm.svelte';
 	import EngineSettings from '#lib/components/EngineSettings.svelte';
 	import HealthDots from '#lib/components/HealthDots.svelte';
@@ -68,6 +69,11 @@
 				</div>
 			</div>
 		</Card>
+
+		<CapacityPanel
+			engines={systemStatus.status.engines}
+			queue={systemStatus.status.queue}
+		/>
 
 		<EngineSettings
 			defaultEngine={systemStatus.settings.defaultEngine}

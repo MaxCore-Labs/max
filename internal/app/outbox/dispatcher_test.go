@@ -16,9 +16,9 @@ import (
 )
 
 type fakeNotifier struct {
-	mu    sync.Mutex
-	fail  bool
-	sent  []app.Notification
+	mu   sync.Mutex
+	fail bool
+	sent []app.Notification
 }
 
 func (n *fakeNotifier) Notify(_ context.Context, msg app.Notification) error {

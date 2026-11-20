@@ -67,6 +67,27 @@ func (s *Server) GetStatus(ctx context.Context, _ gen.GetStatusRequestObject) (g
 		totalQueued += n
 	}
 
+	backlogRows, err := s.deps.Store.Read().ListQueuedBacklogStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nowMs := now.UnixMilli()
+	backlog := make([]gen.PriorityBacklogItem, 0, len(backlogRows))
+	quotaDelayed := 0
+	for _, row := range backlogRows {
+		ageSec := max(int64(0), (nowMs-row.OldestCreatedAt)/1000)
+		reason := s.classifyBacklogReason(ctx, row, caps, used, enabled, nowMs)
+		if reason == "quota_limited" {
+			quotaDelayed += row.Count
+		}
+		backlog = append(backlog, gen.PriorityBacklogItem{
+			Priority:     row.Priority,
+			Count:        row.Count,
+			OldestAgeSec: ageSec,
+			Reason:       reason,
+		})
+	}
+
 	warnings := s.computeStatusWarnings(ctx)
 	var warnPtr *[]string
 	if len(warnings) > 0 {
@@ -76,14 +97,75 @@ func (s *Server) GetStatus(ctx context.Context, _ gen.GetStatusRequestObject) (g
 	return gen.GetStatus200JSONResponse{
 		Engines: engList,
 		Queue: gen.QueueSummary{
-			Total:      totalQueued,
-			ByPriority: byPrio,
+			Total:        totalQueued,
+			ByPriority:   byPrio,
+			QuotaDelayed: &quotaDelayed,
+			Backlog:      &backlog,
 		},
 		Deps: map[string]string{
 			"sqlite": "ok",
 		},
 		Warnings: warnPtr,
 	}, nil
+}
+
+func (s *Server) classifyBacklogReason(
+	ctx context.Context,
+	row app.QueuedBacklogRow,
+	caps, used map[domain.EngineName]int,
+	enabled map[domain.EngineName]bool,
+	nowMs int64,
+) string {
+	if row.Priority < int(domain.PrioInteractive) && row.CooldownUntil > nowMs {
+		return "cooldown"
+	}
+	if row.AgentStatus == domain.AgentQuotaPaused {
+		return "quota_limited"
+	}
+
+	eligibleCount := 0
+	quotaBlockedCount := 0
+	slotsFullCount := 0
+	prio := domain.Priority(row.Priority)
+
+	for _, eng := range []domain.EngineName{domain.EngineAgy, domain.EngineClaude, domain.EngineCodex} {
+		if !enabled[eng] || (row.EngineMask&domain.EngineBit(eng)) == 0 {
+			continue
+		}
+		eligibleCount++
+		if s.engineQuotaHeld(ctx, eng, prio, nowMs) {
+			quotaBlockedCount++
+			continue
+		}
+		total := caps[eng]
+		limit := total
+		if total >= 2 && prio < domain.PrioInteractive {
+			limit = total - 1
+		}
+		if used[eng] >= limit {
+			slotsFullCount++
+		}
+	}
+
+	if eligibleCount > 0 && quotaBlockedCount == eligibleCount {
+		return "quota_limited"
+	}
+	if (row.ActiveRunID != nil && *row.ActiveRunID != "") ||
+		(row.TeamMaxRunning > 0 && row.TeamRunning >= row.TeamMaxRunning) ||
+		(eligibleCount > 0 && quotaBlockedCount+slotsFullCount == eligibleCount) {
+		return "slots_full"
+	}
+	return "ready"
+}
+
+func (s *Server) engineQuotaHeld(ctx context.Context, eng domain.EngineName, prio domain.Priority, nowMs int64) bool {
+	if s.deps.Quota != nil {
+		return s.deps.Quota.Admit(eng, prio) != domain.AdmitNow
+	}
+	if qs, ok, err := s.deps.Store.Read().GetQuotaState(ctx, eng); err == nil && ok && qs.LimitedUntil != nil {
+		return *qs.LimitedUntil > nowMs
+	}
+	return false
 }
 
 func (s *Server) GetSettings(ctx context.Context, _ gen.GetSettingsRequestObject) (gen.GetSettingsResponseObject, error) {

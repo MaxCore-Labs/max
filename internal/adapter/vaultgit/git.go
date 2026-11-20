@@ -68,20 +68,49 @@ func (v *Vault) CommitPaths(ctx context.Context, paths []string, msg string) (st
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	addArgs := append([]string{"add", "--"}, cleanPaths...)
-	if _, err := v.runGitLocked(ctx, addArgs...); err != nil {
-		return "", err
+	const chunkSize = 200
+	for i := 0; i < len(cleanPaths); i += chunkSize {
+		end := min(i+chunkSize, len(cleanPaths))
+		addArgs := append([]string{"add", "--"}, cleanPaths[i:end]...)
+		if _, err := v.runGitLocked(ctx, addArgs...); err != nil {
+			return "", err
+		}
 	}
 
-	diffArgs := append([]string{"diff", "--cached", "--quiet", "--"}, cleanPaths...)
-	if _, err := v.runGitLocked(ctx, diffArgs...); err == nil {
+	hasStaged := false
+	for i := 0; i < len(cleanPaths); i += chunkSize {
+		end := min(i+chunkSize, len(cleanPaths))
+		diffArgs := append([]string{"diff", "--cached", "--quiet", "--"}, cleanPaths[i:end]...)
+		if _, err := v.runGitLocked(ctx, diffArgs...); err != nil {
+			hasStaged = true
+			break
+		}
+	}
+	if !hasStaged {
 		// Nothing staged on these paths.
 		return "", nil
 	}
 
-	commitArgs := append([]string{"commit", "-m", cleanMsg, "--"}, cleanPaths...)
-	if _, err := v.runGitLocked(ctx, commitArgs...); err != nil {
-		return "", err
+	if len(cleanPaths) <= chunkSize {
+		commitArgs := append([]string{"commit", "-m", cleanMsg, "--"}, cleanPaths...)
+		if _, err := v.runGitLocked(ctx, commitArgs...); err != nil {
+			return "", err
+		}
+	} else {
+		psFile, err := os.CreateTemp("", "max-vault-pathspec-*.txt")
+		if err != nil {
+			return "", fmt.Errorf("create pathspec temp: %w", err)
+		}
+		psPath := psFile.Name()
+		_, wErr := psFile.WriteString(strings.Join(cleanPaths, "\n") + "\n")
+		_ = psFile.Close()
+		defer func() { _ = os.Remove(psPath) }()
+		if wErr != nil {
+			return "", fmt.Errorf("write pathspec temp: %w", wErr)
+		}
+		if _, err := v.runGitLocked(ctx, "commit", "-m", cleanMsg, "--pathspec-from-file="+psPath); err != nil {
+			return "", err
+		}
 	}
 	return v.runGitLocked(ctx, "rev-parse", "HEAD")
 }

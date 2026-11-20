@@ -44,13 +44,13 @@ func (v *stubVault) CommitPaths(_ context.Context, paths []string, _ string) (st
 	v.commits++
 	return "deadbeef", nil
 }
-func (v *stubVault) PullIfIdle(context.Context, int) error             { return nil }
-func (v *stubVault) Push(context.Context) error                        { return nil }
-func (v *stubVault) Read(context.Context, string) ([]byte, error)            { return nil, nil }
-func (v *stubVault) Write(context.Context, string, []byte) error             { return nil }
-func (v *stubVault) Remove(context.Context, string) error                    { return nil }
-func (v *stubVault) ListDir(context.Context, string) ([]string, error)       { return nil, nil }
-func (v *stubVault) HeadSHA(context.Context) (string, error)                 { return "head0", nil }
+func (v *stubVault) PullIfIdle(context.Context, int) error                      { return nil }
+func (v *stubVault) Push(context.Context) error                                 { return nil }
+func (v *stubVault) Read(context.Context, string) ([]byte, error)               { return nil, nil }
+func (v *stubVault) Write(context.Context, string, []byte) error                { return nil }
+func (v *stubVault) Remove(context.Context, string) error                       { return nil }
+func (v *stubVault) ListDir(context.Context, string) ([]string, error)          { return nil, nil }
+func (v *stubVault) HeadSHA(context.Context) (string, error)                    { return "head0", nil }
 func (v *stubVault) RevertLastByPrefix(context.Context, string) (string, error) { return "rev0", nil }
 func (v *stubVault) MirrorSkills(context.Context) error                         { return nil }
 func (v *stubVault) RefuseIfProjectSettings(context.Context) error              { return nil }
