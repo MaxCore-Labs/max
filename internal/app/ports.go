@@ -97,10 +97,24 @@ type WakeupRecord struct {
 	CreatedAt      int64
 }
 
+// ConversationRecord represents a row in the conversations table.
+type ConversationRecord struct {
+	ID         domain.ID
+	AgentID    domain.ID
+	TaskID     *domain.ID
+	ThreadID   *domain.ID
+	Sessions   string
+	LastEngine *string
+	WaitingFor *string
+	TurnsUsed  int
+	ClosedAt   *int64
+}
+
 // Reader exposes non-transactional read queries backed by the reader pool.
 type Reader interface {
 	GetKV(ctx context.Context, key string) (val string, ok bool, err error)
 	GetAgent(ctx context.Context, id domain.ID) (AgentRecord, bool, error)
+	ListQueuedWakeups(ctx context.Context, agentID domain.ID) ([]WakeupRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -109,7 +123,13 @@ type Tx interface {
 	UpsertKV(ctx context.Context, key, val string, updatedAt int64) error
 	InsertTeam(ctx context.Context, t TeamRecord) error
 	InsertAgent(ctx context.Context, a AgentRecord) error
+	InsertConversation(ctx context.Context, c ConversationRecord) error
+	SetAgentActiveRun(ctx context.Context, agentID domain.ID, runID *domain.ID) error
 	InsertWakeupRaw(ctx context.Context, w WakeupRecord) error
+	FindWakeupByIdemKey(ctx context.Context, idemKey string) (domain.ID, bool, error)
+	CoalesceQueuedWakeup(ctx context.Context, agentID domain.ID, convID *domain.ID, kind domain.WakeKind, prio domain.Priority, payload string, notBefore int64) (domain.ID, bool, error)
+	CountQueuedWakeups(ctx context.Context, agentID domain.ID) (int, error)
+	RecomputeAgentReady(ctx context.Context, agentID domain.ID, nowMs int64) error
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
