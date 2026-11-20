@@ -57,7 +57,7 @@
 <div class="flex min-h-screen bg-background text-foreground {className}">
 	<aside
 		aria-label={t('nav.main')}
-		class="hidden w-60 shrink-0 flex-col gap-0.5 border-r border-border-strong bg-surface p-2 lg:flex"
+		class="hidden w-60 shrink-0 flex-col gap-0.5 border-r border-border-strong bg-surface p-2 md:flex"
 	>
 		<div class="px-3 py-2 text-base font-semibold text-foreground">{t('app.title')}</div>
 		<nav class="flex flex-col gap-0.5" aria-label={t('nav.main')}>

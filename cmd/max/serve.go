@@ -142,7 +142,25 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 		engines, binPaths = defaultEngines(cfg)
 	}
 
-	slots := limits.NewSlots(cfg.Slots, nil)
+	activeSlots := make(map[domain.EngineName]int, len(engines))
+	if len(cfg.Engines) > 0 {
+		for _, name := range cfg.Engines {
+			if n, ok := cfg.Slots[name]; ok && n > 0 {
+				activeSlots[name] = n
+			} else {
+				activeSlots[name] = 3
+			}
+		}
+	} else {
+		for name := range engines {
+			if n, ok := cfg.Slots[name]; ok && n > 0 {
+				activeSlots[name] = n
+			} else {
+				activeSlots[name] = 3
+			}
+		}
+	}
+	slots := limits.NewSlots(activeSlots, nil)
 	quota := limits.NewQuota(st, clk, limits.QuotaConfig{
 		ShortHours:      cfg.QuotaShortHours,
 		BackgroundShare: cfg.QuotaBackgroundShare,
