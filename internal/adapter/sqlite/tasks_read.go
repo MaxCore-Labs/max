@@ -273,3 +273,34 @@ func (r *sqliteReader) GetMaxWakeupHopsForTask(ctx context.Context, agentID, tas
 	}
 	return hops, nil
 }
+
+func (r *sqliteReader) HasWakeupIdemKey(ctx context.Context, idemKey string) (bool, error) {
+	var dummy int
+	err := r.q.QueryRowContext(ctx, `SELECT 1 FROM wakeups WHERE idempotency_key = ? LIMIT 1`, idemKey).Scan(&dummy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check wakeup idem key %q: %w", idemKey, err)
+	}
+	return true, nil
+}
+
+func (r *sqliteReader) HasTaskProgressedSince(ctx context.Context, taskID domain.ID, sinceMs int64) (bool, int, error) {
+	var evCount, childCount int
+	if err := r.q.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM task_events
+		WHERE task_id = ? AND kind IN ('status', 'review') AND created_at >= ?`,
+		taskID, sinceMs,
+	).Scan(&evCount); err != nil {
+		return false, 0, err
+	}
+	if err := r.q.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM tasks
+		WHERE parent_id = ? AND created_at >= ?`,
+		taskID, sinceMs,
+	).Scan(&childCount); err != nil {
+		return false, 0, err
+	}
+	return evCount > 0, childCount, nil
+}

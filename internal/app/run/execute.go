@@ -13,6 +13,7 @@ import (
 
 	"max/internal/app"
 	"max/internal/app/actor"
+	"max/internal/app/coord"
 	"max/internal/domain"
 )
 
@@ -46,6 +47,7 @@ type TokenIdentity struct {
 type Deps struct {
 	Store           app.Store
 	Actors          *actor.Service
+	Coord           *coord.Service
 	Engines         map[domain.EngineName]app.Engine
 	Prompts         app.PromptBuilder
 	Vault           app.Vault

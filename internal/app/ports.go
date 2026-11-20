@@ -89,6 +89,8 @@ type Reader interface {
 	ListWatchdogCandidateTasks(ctx context.Context, staleBeforeMs, nowMs int64) ([]TaskRecord, error)
 	GetConversationByTask(ctx context.Context, agentID, taskID domain.ID) (ConversationRecord, bool, error)
 	GetMaxWakeupHopsForTask(ctx context.Context, agentID, taskID domain.ID) (int, error)
+	HasWakeupIdemKey(ctx context.Context, idemKey string) (bool, error)
+	HasTaskProgressedSince(ctx context.Context, taskID domain.ID, sinceMs int64) (statusChanged bool, childrenAdded int, err error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.

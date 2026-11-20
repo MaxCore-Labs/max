@@ -8,6 +8,7 @@ import (
 
 	"max/internal/app"
 	"max/internal/app/actor"
+	"max/internal/app/coord"
 	"max/internal/domain"
 )
 
@@ -126,6 +127,15 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 
 		if err := tx.ClearTaskCheckout(ctx, runID, nowMs); err != nil {
 			return err
+		}
+
+		if s.deps.Coord != nil && runRec.TaskID != nil && *runRec.TaskID != "" &&
+			(status == domain.RunSucceeded || status == domain.RunParked || status == domain.RunTurnLimit) {
+			stChanged, chAdded, _ := tx.HasTaskProgressedSince(ctx, *runRec.TaskID, runRec.StartedAt)
+			progressed := coord.DidRunProgress(stChanged, o.TouchedPaths, chAdded)
+			if err := s.deps.Coord.NoteRunOutcome(ctx, tx, *runRec.TaskID, progressed); err != nil {
+				return err
+			}
 		}
 
 		switch {
