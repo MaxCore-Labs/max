@@ -191,7 +191,7 @@ func (s *Service) SyncAll(ctx context.Context) (updated int, problems []Problem,
 }
 
 func checkSensitiveGate(af AgentFile) error {
-	if (af.Browser != domain.BrowserOwner && !af.Sensitive) || af.AllowUngatedEngine {
+	if (af.Browser != domain.BrowserOwner && !af.Sensitive && af.Template != "developer") || af.AllowUngatedEngine {
 		return nil
 	}
 	for _, e := range af.Engines {

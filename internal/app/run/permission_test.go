@@ -118,7 +118,7 @@ func TestPermissionFuncAskParks(t *testing.T) {
 	dec := perm(ctx, app.ToolAsk{
 		RunToken: tok,
 		ToolName: "run_command",
-		Input:    json.RawMessage(`{"cmd":"ls -la"}`),
+		Input:    json.RawMessage(`{"cmd":"git commit -m wip"}`),
 	})
 	if dec.Verdict != domain.Ask {
 		t.Fatalf("verdict = %v (%s), want Ask", dec.Verdict, dec.Reason)

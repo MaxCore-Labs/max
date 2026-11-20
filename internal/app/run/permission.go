@@ -90,6 +90,7 @@ func NewPermissionFunc(deps PermissionDeps) app.PermissionFunc {
 			Rel:        rel,
 			SearchRoot: searchRel,
 			InputHash:  inputHash,
+			Input:      ask.Input,
 		}
 
 		dec := domain.Decide(pol, tc, origin, nil, deps.Clock.Now())

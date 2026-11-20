@@ -120,6 +120,14 @@ func Decide(a AgentPolicy, c ToolCall, origin RootOrigin, grants []Grant, now ti
 		if !a.Shell {
 			return Decision{Verdict: Deny, Reason: "shell capability is disabled for this agent"}
 		}
+		if cmd := extractShellCommand(c.Input); cmd != "" {
+			switch ShellVerdict(cmd) {
+			case Deny:
+				return Decision{Verdict: Deny, Reason: "shell command is forbidden by security policy"}
+			case Allow:
+				return Decision{Verdict: Allow}
+			}
+		}
 		if gid, ok, _ := findMatchingGrant(grants, c.Connection, c.Name, c.Input, origin, now); ok {
 			return Decision{Verdict: Allow, GrantID: gid}
 		}
