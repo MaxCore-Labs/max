@@ -194,6 +194,12 @@ func decideBrowser(a AgentPolicy, c ToolCall, origin RootOrigin, grants []Grant,
 	case BrowserAnon:
 		return Decision{Verdict: Allow}
 	case BrowserOwner:
+		if IsOwnerPasswordAction(c.Name, c.Input) {
+			return Decision{
+				Verdict: Deny,
+				Reason:  "không gõ mật khẩu tự động trên profile owner; hãy gọi tool handoff(reason, origin) để chủ nhân tiếp quản",
+			}
+		}
 		conn := c.Connection
 		if conn == "" {
 			conn = "browser"

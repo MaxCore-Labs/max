@@ -284,6 +284,11 @@ type Browser interface {
 	MCPSpec(endpoint string) MCPServerSpec
 }
 
+// BrowserHandoff starts a loopback human takeover session and parks the conversation waiting on owner (Spec 8.10 & P4.02).
+type BrowserHandoff interface {
+	Handoff(ctx context.Context, agentID, runID, convID domain.ID, reason, origin string) (string, error)
+}
+
 // OutboundInvoker invokes a registered external MCP connection tool outside DB transactions.
 type OutboundInvoker interface {
 	Invoke(ctx context.Context, kind string, decryptedConfig []byte, tool string, input json.RawMessage) (string, error)

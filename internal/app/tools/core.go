@@ -47,6 +47,7 @@ type Service struct {
 	coord     *coord.Service
 	actors    *actor.Service
 	memory    app.EpisodicMemory
+	handoff   app.BrowserHandoff
 	mu        sync.Mutex
 	runCounts map[domain.ID]domain.RunCounters
 }
@@ -84,6 +85,12 @@ func (s *Service) WithMemory(mem app.EpisodicMemory) *Service {
 // WithVault attaches a git-backed Vault port to tools.Service for gated fact commits.
 func (s *Service) WithVault(v app.Vault) *Service {
 	s.vault = v
+	return s
+}
+
+// WithHandoff attaches a BrowserHandoff port to tools.Service for human browser takeover.
+func (s *Service) WithHandoff(h app.BrowserHandoff) *Service {
+	s.handoff = h
 	return s
 }
 
