@@ -154,6 +154,32 @@ func (v *Vault) Read(_ context.Context, rel string) ([]byte, error) {
 	return os.ReadFile(cur)
 }
 
+// ListDir returns sorted entry names inside vault-relative directory rel (empty slice if absent).
+func (v *Vault) ListDir(_ context.Context, rel string) ([]string, error) {
+	var target string
+	if rel == "" || rel == "." {
+		target = v.dir
+	} else {
+		clean, ok := domain.CleanRel(rel)
+		if !ok {
+			return nil, fmt.Errorf("invalid vault dir %q", rel)
+		}
+		target = filepath.Join(v.dir, filepath.FromSlash(clean))
+	}
+	entries, err := os.ReadDir(target)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Name())
+	}
+	return out, nil
+}
+
 // RefuseIfProjectSettings returns an error if .claude/settings*.json exists inside the vault (Spec 8.6).
 func (v *Vault) RefuseIfProjectSettings(_ context.Context) error {
 	matches, err := filepath.Glob(filepath.Join(v.dir, ".claude", "settings*.json"))

@@ -40,7 +40,9 @@ func (UUIDv7Gen) New() domain.ID {
 type Reader interface {
 	GetKV(ctx context.Context, key string) (val string, ok bool, err error)
 	GetAgent(ctx context.Context, id domain.ID) (AgentRecord, bool, error)
+	GetAgentBySlug(ctx context.Context, slug string) (AgentRecord, bool, error)
 	GetTeam(ctx context.Context, id domain.ID) (TeamRecord, bool, error)
+	GetTeamBySlug(ctx context.Context, slug string) (TeamRecord, bool, error)
 	GetConversation(ctx context.Context, id domain.ID) (ConversationRecord, bool, error)
 	GetTask(ctx context.Context, id domain.ID) (TaskRecord, bool, error)
 	GetRun(ctx context.Context, id domain.ID) (RunRecord, bool, error)
@@ -62,7 +64,10 @@ type Tx interface {
 	Reader
 	UpsertKV(ctx context.Context, key, val string, updatedAt int64) error
 	InsertTeam(ctx context.Context, t TeamRecord) error
+	EnsureTeamBySlug(ctx context.Context, slug, newID string) (domain.ID, error)
 	InsertAgent(ctx context.Context, a AgentRecord) error
+	UpsertSyncedAgent(ctx context.Context, a AgentRecord) error
+	SetAgentManager(ctx context.Context, agentID domain.ID, managerID *domain.ID) error
 	SetAgentCooldown(ctx context.Context, agentID domain.ID, cooldownUntil int64) error
 	SetAgentLastRunAt(ctx context.Context, agentID domain.ID, lastRunAt int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error
@@ -117,6 +122,7 @@ type Vault interface {
 	PullIfIdle(ctx context.Context, runsActive int) error
 	Push(ctx context.Context) error
 	Read(ctx context.Context, rel string) ([]byte, error)
+	ListDir(ctx context.Context, rel string) ([]string, error)
 	RefuseIfProjectSettings(ctx context.Context) error
 }
 
