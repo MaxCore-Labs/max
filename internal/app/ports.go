@@ -36,144 +36,20 @@ func (UUIDv7Gen) New() domain.ID {
 	return id.String()
 }
 
-// TeamRecord represents a row in the teams table.
-type TeamRecord struct {
-	ID             domain.ID
-	Slug           string
-	Name           string
-	MandateJSON    string
-	MaxRunning     int
-	Running        int
-	QuotaTokensDay *int64
-	Status         string
-}
-
-// AgentRecord represents a row in the agents table.
-type AgentRecord struct {
-	ID                 domain.ID
-	Slug               string
-	Name               string
-	TemplateSlug       *string
-	TeamID             domain.ID
-	ManagerAgentID     *domain.ID
-	EnginesJSON        string
-	EngineMask         int
-	AllowUngatedEngine bool
-	ModelsJSON         string
-	ScopeViolations    int
-	Autonomy           domain.Autonomy
-	Web                bool
-	Browser            domain.BrowserProfile
-	Shell              bool
-	SkillsJSON         string
-	ParamsJSON         string
-	QuotaTokensDay     *int64
-	ConfigRev          string
-	Status             domain.AgentStatus
-	Ready              bool
-	ReadyPriority      int
-	ReadySince         *int64
-	ActiveRunID        *domain.ID
-	CooldownUntil      int64
-	LastRunAt          *int64
-	NextHeartbeatAt    *int64
-}
-
-// WakeupRecord represents a row in the wakeups table.
-type WakeupRecord struct {
-	ID             domain.ID
-	AgentID        domain.ID
-	ConversationID *domain.ID
-	Kind           domain.WakeKind
-	Priority       domain.Priority
-	Payload        string
-	IdempotencyKey *string
-	Status         string
-	RunID          *domain.ID
-	CoalescedCount int
-	Attempts       int
-	CauseRunID     *domain.ID
-	Hops           int
-	NotBefore      int64
-	CreatedAt      int64
-}
-
-// ConversationRecord represents a row in the conversations table.
-type ConversationRecord struct {
-	ID         domain.ID
-	AgentID    domain.ID
-	TaskID     *domain.ID
-	ThreadID   *domain.ID
-	Sessions   string
-	LastEngine *string
-	WaitingFor *string
-	TurnsUsed  int
-	ClosedAt   *int64
-}
-
-// RunRecord represents a row in the runs table.
-type RunRecord struct {
-	ID               domain.ID
-	AgentID          domain.ID
-	ConversationID   domain.ID
-	TaskID           *domain.ID
-	Status           domain.RunStatus
-	Priority         domain.Priority
-	Engine           domain.EngineName
-	Model            string
-	PGID             *int64
-	Attempt          int
-	Turns            int
-	InputTokens      int64
-	OutputTokens     int64
-	CachedReadTokens int64
-	ThoughtTokens    int64
-	NotionalMicroUSD int64
-	TouchedPathsJSON string
-	Error            *string
-	Summary          *string
-	VaultCommit      *string
-	StartedAt        int64
-	EndedAt          *int64
-}
-
-// CandidateAgent represents an eligible ready agent row joined with its team running counts.
-type CandidateAgent struct {
-	ID            domain.ID
-	TeamID        domain.ID
-	EnginesJSON   string
-	ModelsJSON    string
-	CooldownUntil int64
-	ReadyPriority int
-	TeamRunning   int
-	TeamMaxRun    int
-}
-
-// InboxItemRecord represents a row in inbox_items.
-type InboxItemRecord struct {
-	ID             domain.ID
-	Kind           string
-	Title          string
-	Body           string
-	RefKind        *string
-	RefID          *string
-	ConversationID *domain.ID
-	AgentID        *domain.ID
-	ChoicesJSON    string
-	Urgency        string
-	DedupeKey      *string
-	CreatedAt      int64
-}
-
 // Reader exposes non-transactional read queries backed by the reader pool.
 type Reader interface {
 	GetKV(ctx context.Context, key string) (val string, ok bool, err error)
 	GetAgent(ctx context.Context, id domain.ID) (AgentRecord, bool, error)
 	GetTeam(ctx context.Context, id domain.ID) (TeamRecord, bool, error)
 	GetConversation(ctx context.Context, id domain.ID) (ConversationRecord, bool, error)
+	GetTask(ctx context.Context, id domain.ID) (TaskRecord, bool, error)
 	GetRun(ctx context.Context, id domain.ID) (RunRecord, bool, error)
+	GetLastFinishedRunForConv(ctx context.Context, convID domain.ID) (RunRecord, bool, error)
 	GetWakeup(ctx context.Context, agentID, wakeupID domain.ID) (WakeupRecord, bool, error)
+	GetQuotaState(ctx context.Context, engine domain.EngineName) (QuotaStateRecord, bool, error)
 	ListQueuedWakeups(ctx context.Context, agentID domain.ID) ([]WakeupRecord, error)
+	ListClaimedWakeupsByRun(ctx context.Context, runID domain.ID) ([]WakeupRecord, error)
+	ListRunEvents(ctx context.Context, runID domain.ID) ([]RunEventRecord, error)
 	ListInboxItems(ctx context.Context, limit int) ([]InboxItemRecord, error)
 }
 
@@ -184,10 +60,17 @@ type Tx interface {
 	InsertTeam(ctx context.Context, t TeamRecord) error
 	InsertAgent(ctx context.Context, a AgentRecord) error
 	SetAgentCooldown(ctx context.Context, agentID domain.ID, cooldownUntil int64) error
+	SetAgentLastRunAt(ctx context.Context, agentID domain.ID, lastRunAt int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error
 	EnsureSystemConversation(ctx context.Context, agentID, newConvID domain.ID) (domain.ID, error)
+	UpdateConversationAfterRun(ctx context.Context, convID domain.ID, sessionsJSON string, lastEngine *string, addTurns int) error
+	InsertTask(ctx context.Context, tk TaskRecord) error
+	ClearTaskCheckout(ctx context.Context, runID domain.ID, updatedAt int64) error
+	BlockTask(ctx context.Context, taskID domain.ID, reason string, updatedAt int64) error
 	SetAgentActiveRun(ctx context.Context, agentID domain.ID, runID *domain.ID) error
 	InsertRun(ctx context.Context, r RunRecord) error
+	UpdateRunFinal(ctx context.Context, r RunRecord) error
+	InsertRunEvent(ctx context.Context, ev RunEventRecord) error
 	AdjustTeamRunning(ctx context.Context, teamID domain.ID, delta int) error
 	InsertWakeupRaw(ctx context.Context, w WakeupRecord) error
 	FindWakeupByIdemKey(ctx context.Context, idemKey string) (domain.ID, bool, error)
@@ -197,6 +80,9 @@ type Tx interface {
 	ListCandidateAgents(ctx context.Context, nowMs int64, engineMask, limit int) ([]CandidateAgent, error)
 	PeekTopDueWakeup(ctx context.Context, agentID domain.ID, nowMs int64) (WakeupRecord, bool, error)
 	DrainDueWakeupsForConv(ctx context.Context, agentID domain.ID, origConvID *domain.ID, targetConvID, runID domain.ID, nowMs int64, limit int) ([]WakeupRecord, error)
+	FinishWakeupsForRun(ctx context.Context, runID domain.ID, status string) error
+	RequeueWakeupsForRun(ctx context.Context, runID domain.ID, refundAttempt bool) error
+	UpsertQuotaLimit(ctx context.Context, engine domain.EngineName, limitedUntil, nowMs int64) error
 	InsertInboxItem(ctx context.Context, item InboxItemRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
@@ -205,6 +91,22 @@ type Tx interface {
 type Store interface {
 	WithTx(ctx context.Context, fn func(tx Tx) error) error
 	Read() Reader
+}
+
+// PromptBuilder assembles bounded system and per-run user prompts (implemented in P1.12).
+type PromptBuilder interface {
+	System(ctx context.Context, agentID domain.ID) (string, error)
+	RunMessage(ctx context.Context, c Claimed) (string, error)
+}
+
+// Vault abstracts the git-backed content vault (implemented in P1.16).
+type Vault interface {
+	EnsureInstalled(ctx context.Context) error
+	CommitPaths(ctx context.Context, paths []string, msg string) (sha string, err error)
+	PullIfIdle(ctx context.Context, runsActive int) error
+	Push(ctx context.Context) error
+	Read(ctx context.Context, rel string) ([]byte, error)
+	RefuseIfProjectSettings(ctx context.Context) error
 }
 
 // EngineCaps describes security and protocol capabilities of a CLI driver (Spec 8.4).

@@ -31,15 +31,7 @@ type WakeInput struct {
 }
 
 // Wakeup is the drained wakeup representation handed to a claimed run.
-type Wakeup struct {
-	ID             domain.ID
-	Kind           domain.WakeKind
-	Payload        json.RawMessage
-	CoalescedCount int
-	Attempts       int
-	CauseRunID     *domain.ID
-	Hops           int
-}
+type Wakeup = app.Wakeup
 
 // Service manages durable agent mailboxes, fair claiming, and crash recovery.
 type Service struct {

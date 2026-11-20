@@ -14,15 +14,7 @@ import (
 const drainBatchCap = 20
 
 // Claimed describes a run claimed inside ClaimBatch and ready to be spawned outside the DB transaction.
-type Claimed struct {
-	RunID, AgentID, ConversationID domain.ID
-	TaskID                         *domain.ID
-	Engine                         domain.EngineName
-	Priority                       domain.Priority
-	Wakeups                        []Wakeup
-	SessionID                      string
-	EngineChanged                  bool
-}
+type Claimed = app.Claimed
 
 // Capacity conveys available engine process slots and subscription quota admission at dispatch time.
 type Capacity struct {
