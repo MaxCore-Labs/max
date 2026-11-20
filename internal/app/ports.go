@@ -111,6 +111,7 @@ type Tx interface {
 	UpsertSyncedAgent(ctx context.Context, a AgentRecord) error
 	SetAgentManager(ctx context.Context, agentID domain.ID, managerID *domain.ID) error
 	SetAgentStatus(ctx context.Context, agentID domain.ID, status domain.AgentStatus) error
+	RecordScopeViolations(ctx context.Context, agentID domain.ID, addCount int, nowMs int64) (total int, paused bool, err error)
 	SetAgentCooldown(ctx context.Context, agentID domain.ID, cooldownUntil int64) error
 	SetAgentLastRunAt(ctx context.Context, agentID domain.ID, lastRunAt int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error

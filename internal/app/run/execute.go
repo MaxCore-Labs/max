@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"max/internal/app"
 	"max/internal/app/actor"
 	"max/internal/app/coord"
+	"max/internal/app/prompt"
 	"max/internal/domain"
 )
 
@@ -32,6 +32,7 @@ type Outcome struct {
 	SessionID                 string
 	Summary, Err              string
 	TouchedPaths              []string
+	ScopeViolations           int
 	LimitResetAt              *time.Time
 	SessionRebuilt            bool
 }
@@ -45,21 +46,24 @@ type TokenIdentity struct {
 
 // Deps bundles dependencies injected into run.Service.
 type Deps struct {
-	Store           app.Store
-	Actors          *actor.Service
-	Coord           *coord.Service
-	Engines         map[domain.EngineName]app.Engine
-	Prompts         app.PromptBuilder
-	Vault           app.Vault
-	VaultDir        string
-	Permission      app.PermissionFunc
-	OnEvent         func(c actor.Claimed, ev app.EngineEvent)
-	PostRunAudit    func(ctx context.Context, runID domain.ID, slug string) []string
-	Clock           app.Clock
-	IDs             app.IDGen
-	WallTimeout     time.Duration
-	Cooldown        *time.Duration
-	FinalizeBackoff time.Duration
+	Store            app.Store
+	Actors           *actor.Service
+	Coord            *coord.Service
+	Engines          map[domain.EngineName]app.Engine
+	Prompts          app.PromptBuilder
+	Vault            app.Vault
+	VaultDir         string
+	Permission       app.PermissionFunc
+	OnEvent          func(c actor.Claimed, ev app.EngineEvent)
+	OnRunStart       func(c actor.Claimed, slug, token string)
+	OnRunEnd         func(runID domain.ID)
+	PostRunAudit     func(ctx context.Context, runID domain.ID, slug string) []string
+	PostRunAuditFull func(ctx context.Context, runID domain.ID, scope domain.AgentScope) (touched []string, violations int)
+	Clock            app.Clock
+	IDs              app.IDGen
+	WallTimeout      time.Duration
+	Cooldown         *time.Duration
+	FinalizeBackoff  time.Duration
 }
 
 // Service orchestrates non-interactive CLI run execution and atomic post-run finalization.
@@ -91,7 +95,7 @@ func NewService(deps Deps) *Service {
 	}
 }
 
-// SetPermission wires a PermissionFunc after construction (breaking circular init between run and permission).
+// SetPermission wires a PermissionFunc after construction.
 func (s *Service) SetPermission(fn app.PermissionFunc) {
 	s.deps.Permission = fn
 }
@@ -200,8 +204,14 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 			return Outcome{}, fmt.Errorf("build run prompt: %w", err)
 		}
 	}
-	if rebuilt && !strings.Contains(runPrompt, "<history>") {
-		runPrompt = "<history>Session rebuilt after cold idle period.</history>\n" + runPrompt
+	if (effectiveClaim.EngineChanged || rebuilt) && !strings.Contains(runPrompt, "<history>") {
+		hist := s.loadCarryOverHistory(ctx, effectiveClaim)
+		if hist == "" && rebuilt {
+			hist = "Session rebuilt after cold idle period."
+		}
+		if hist != "" {
+			runPrompt = "<history>\n" + hist + "\n</history>\n" + runPrompt
+		}
 	}
 
 	eng, ok := s.deps.Engines[c.Engine]
@@ -216,7 +226,15 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 		TaskID:         c.TaskID,
 		AgentSlug:      ag.Slug,
 	})
-	defer s.revokeToken(token)
+	if s.deps.OnRunStart != nil {
+		s.deps.OnRunStart(c, ag.Slug, token)
+	}
+	defer func() {
+		s.revokeToken(token)
+		if s.deps.OnRunEnd != nil {
+			s.deps.OnRunEnd(c.RunID)
+		}
+	}()
 
 	spec := app.RunSpec{
 		RunID:        c.RunID,
@@ -235,8 +253,24 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 	out.SessionRebuilt = rebuilt
 
 	s.revokeToken(token)
+	if s.deps.OnRunEnd != nil {
+		s.deps.OnRunEnd(c.RunID)
+	}
+
 	merged := s.TouchedPaths(c.RunID)
-	if s.deps.PostRunAudit != nil {
+	if s.deps.PostRunAuditFull != nil {
+		var teamSlug string
+		if tm, tok, _ := s.deps.Store.Read().GetTeam(ctx, ag.TeamID); tok {
+			teamSlug = tm.Slug
+		}
+		audited, vCount := s.deps.PostRunAuditFull(ctx, c.RunID, domain.AgentScope{Slug: ag.Slug, TeamSlug: teamSlug})
+		out.ScopeViolations += vCount
+		for _, p := range audited {
+			if !slices.Contains(merged, p) {
+				merged = append(merged, p)
+			}
+		}
+	} else if s.deps.PostRunAudit != nil {
 		for _, p := range s.deps.PostRunAudit(ctx, c.RunID, ag.Slug) {
 			if !slices.Contains(merged, p) {
 				merged = append(merged, p)
@@ -260,125 +294,37 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 	return out, nil
 }
 
-func (s *Service) driveEngine(ctx context.Context, claimed actor.Claimed, eng app.Engine, spec app.RunSpec, priorConvTurns int) Outcome {
-	runCtx, cancel := context.WithTimeout(ctx, s.deps.WallTimeout)
-	defer cancel()
+func (s *Service) loadCarryOverHistory(ctx context.Context, c actor.Claimed) string {
+	rd := s.deps.Store.Read()
+	var summary string
+	var pEvents []prompt.TaskEvent
 
-	var askedApproval bool
-	perm := func(pctx context.Context, ask app.ToolAsk) domain.Decision {
-		if s.deps.Permission == nil {
-			return domain.Decision{Verdict: domain.Allow}
+	if c.TaskID != nil && *c.TaskID != "" {
+		if tk, ok, err := rd.GetTask(ctx, *c.TaskID); err == nil && ok {
+			summary = fmt.Sprintf("%s (%s)", tk.Title, tk.Status)
 		}
-		dec := s.deps.Permission(pctx, ask)
-		if dec.Verdict == domain.Ask {
-			askedApproval = true
-		}
-		return dec
-	}
-
-	evCh, err := eng.Run(runCtx, spec, perm)
-	if err != nil {
-		return Outcome{Status: domain.RunInterrupted, Err: err.Error()}
-	}
-
-	var (
-		out             Outcome
-		textBuf         strings.Builder
-		started         bool
-		afterToolResult bool
-		sawFinal        bool
-	)
-	out.SessionID = spec.SessionID
-
-	for ev := range evCh {
-		if s.deps.OnEvent != nil {
-			s.deps.OnEvent(claimed, ev)
-		}
-		if !started && (ev.Type == "session" || ev.Type == "text_delta" || ev.Type == "tool_call" || ev.Type == "final") {
-			started = true
-			out.Turns = 1
-		}
-		switch ev.Type {
-		case "session":
-			if ev.SessionID != "" {
-				out.SessionID = ev.SessionID
+		if evs, err := rd.ListTaskEvents(ctx, *c.TaskID, 50); err == nil {
+			for _, ev := range evs {
+				actorStr := ev.ActorKind
+				if ev.ActorID != nil {
+					actorStr = *ev.ActorID
+				}
+				pEvents = append(pEvents, prompt.TaskEvent{
+					Kind:      ev.Kind,
+					Actor:     actorStr,
+					Body:      ev.Body,
+					CreatedAt: time.UnixMilli(ev.CreatedAt).UTC(),
+				})
 			}
-		case "text_delta":
-			if afterToolResult {
-				out.Turns++
-				afterToolResult = false
-			}
-			textBuf.WriteString(ev.Text)
-		case "tool_call":
-			if afterToolResult {
-				out.Turns++
-				afterToolResult = false
-			}
-		case "tool_result":
-			afterToolResult = true
-		case "usage":
-			if ev.InputTokens > 0 {
-				out.InputTokens = ev.InputTokens
-			}
-			if ev.OutputTokens > 0 {
-				out.OutputTokens = ev.OutputTokens
-			}
-		case "limit":
-			out.Status = domain.RunQuotaStopped
-			out.LimitResetAt = ev.LimitResetAt
-			cancel()
-		case "error":
-			if out.Status == "" {
-				out.Status = domain.RunInterrupted
-				out.Err = ev.ErrMessage
-			}
-			cancel()
-		case "final":
-			sawFinal = true
-			if ev.InputTokens > 0 {
-				out.InputTokens = ev.InputTokens
-			}
-			if ev.OutputTokens > 0 {
-				out.OutputTokens = ev.OutputTokens
-			}
-			if ev.Text != "" && textBuf.Len() == 0 {
-				textBuf.WriteString(ev.Text)
-			}
-		}
-
-		if out.Status == "" && (out.Turns > domain.MaxTurnsPerRun || priorConvTurns+out.Turns > domain.MaxTurnsPerTask) {
-			out.Status = domain.RunTurnLimit
-			cancel()
 		}
 	}
-
-	out.Summary = truncateRunes(strings.TrimSpace(textBuf.String()), 1000)
-
-	if out.Status == "" {
-		switch {
-		case errors.Is(runCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil:
-			out.Status = domain.RunTimedOut
-		case ctx.Err() != nil:
-			out.Status = domain.RunInterrupted
-			out.Err = ctx.Err().Error()
-		case !sawFinal:
-			out.Status = domain.RunInterrupted
-			if out.Err == "" {
-				out.Err = "engine stream closed without final event"
-			}
-		case askedApproval:
-			out.Status = domain.RunParked
-		default:
-			out.Status = domain.RunSucceeded
+	if summary == "" {
+		if lastRun, ok, err := rd.GetLastFinishedRunForConv(ctx, c.ConversationID); err == nil && ok && lastRun.Summary != nil {
+			summary = *lastRun.Summary
 		}
 	}
-	return out
-}
-
-func truncateRunes(s string, maxRunes int) string {
-	r := []rune(s)
-	if len(r) <= maxRunes {
-		return s
+	if summary == "" && len(pEvents) == 0 {
+		summary = "Engine switched for ongoing conversation."
 	}
-	return string(r[:maxRunes])
+	return prompt.BuildHistory(summary, pEvents, 12000)
 }

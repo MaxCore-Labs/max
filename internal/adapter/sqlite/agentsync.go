@@ -125,3 +125,27 @@ func (t *sqliteTx) SetAgentManager(ctx context.Context, agentID domain.ID, manag
 	}
 	return nil
 }
+
+func (t *sqliteTx) RecordScopeViolations(ctx context.Context, agentID domain.ID, addCount int, _ int64) (int, bool, error) {
+	if addCount <= 0 {
+		addCount = 1
+	}
+	if _, err := t.q.ExecContext(ctx, `
+		UPDATE agents SET scope_violations = scope_violations + ? WHERE id = ?`, addCount, agentID,
+	); err != nil {
+		return 0, false, fmt.Errorf("increment scope_violations for %q: %w", agentID, err)
+	}
+	var total int
+	var curStatus string
+	if err := t.q.QueryRowContext(ctx, `SELECT scope_violations, status FROM agents WHERE id = ?`, agentID).Scan(&total, &curStatus); err != nil {
+		return 0, false, err
+	}
+	paused := false
+	if total >= 3 && curStatus != string(domain.AgentPaused) {
+		if _, err := t.q.ExecContext(ctx, `UPDATE agents SET status = 'paused' WHERE id = ?`, agentID); err != nil {
+			return total, false, err
+		}
+		paused = true
+	}
+	return total, paused, nil
+}

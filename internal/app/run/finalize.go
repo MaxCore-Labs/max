@@ -276,6 +276,31 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 		if err := tx.SetAgentActiveRun(ctx, runRec.AgentID, nil); err != nil {
 			return err
 		}
+		if o.ScopeViolations > 0 {
+			totalV, paused, vErr := tx.RecordScopeViolations(ctx, runRec.AgentID, 1, nowMs)
+			if vErr != nil {
+				return vErr
+			}
+			refKind := "agent"
+			refID := runRec.AgentID
+			dedupe := fmt.Sprintf("scope-violation:%s:%d", runRec.AgentID, totalV)
+			title := fmt.Sprintf("Hoàn tác ghi ngoài phạm vi của %s (lần %d)", ag.Slug, totalV)
+			if paused {
+				title = fmt.Sprintf("Tạm dừng agent %s sau 3 lần ghi ngoài phạm vi", ag.Slug)
+			}
+			_ = tx.InsertInboxItem(ctx, app.InboxItemRecord{
+				ID:        s.deps.IDs.New(),
+				Kind:      "error",
+				Title:     title,
+				Body:      fmt.Sprintf("Run %s có %d thay đổi ngoài phạm vi đã bị hoàn tác.", runID, o.ScopeViolations),
+				RefKind:   &refKind,
+				RefID:     &refID,
+				AgentID:   &refID,
+				Urgency:   "high",
+				DedupeKey: &dedupe,
+				CreatedAt: nowMs,
+			})
+		}
 		if err := tx.SetAgentLastRunAt(ctx, runRec.AgentID, nowMs); err != nil {
 			return err
 		}

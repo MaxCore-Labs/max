@@ -29,6 +29,7 @@ import (
 	"max/internal/app/agentsync"
 	"max/internal/app/approvals"
 	"max/internal/app/chat"
+	"max/internal/app/coord"
 	"max/internal/app/dispatch"
 	"max/internal/app/limits"
 	"max/internal/app/prompt"
@@ -214,24 +215,42 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 	}
 	refreshEngineAvailability()
 
+	var (
+		cancelMu   sync.Mutex
+		runCancels = make(map[domain.ID]context.CancelFunc)
+	)
+	cancelRunFn := func(runID domain.ID) {
+		cancelMu.Lock()
+		fn := runCancels[runID]
+		cancelMu.Unlock()
+		if fn != nil {
+			fn()
+		}
+	}
+	coordSvc := coord.NewService(coord.Deps{
+		Store:     st,
+		Actors:    actors,
+		Clock:     clk,
+		IDs:       ids,
+		CancelRun: cancelRunFn,
+		Publish: func(topic, typ string, data any) {
+			bus.Publish(platform.Event{Topic: topic, Type: typ, Data: data})
+		},
+	})
 	apprSvc := approvals.NewService(st, actors, nil, clk, ids)
-	toolSvc := tools.NewService(st, cfg.VaultDir, clk, ids)
+	toolSvc := tools.NewService(st, cfg.VaultDir, clk, ids).WithCoord(coordSvc, actors)
 	mcpSrv := mcpserver.NewServer(toolSvc)
 	sockPath := filepath.Join(cfg.DataDir, "run", "max.sock")
 	if len(sockPath) > 100 {
 		sockPath = filepath.Join(os.TempDir(), fmt.Sprintf("max-%d.sock", os.Getpid()))
 	}
 	_ = mcpSrv.StartUnix(ctx, sockPath)
-
-	var (
-		cancelMu   sync.Mutex
-		runCancels = make(map[domain.ID]context.CancelFunc)
-	)
 	quarantineBase := filepath.Join(cfg.DataDir, "quarantine")
 
 	runSvc := runapp.NewService(runapp.Deps{
 		Store:    st,
 		Actors:   actors,
+		Coord:    coordSvc,
 		Engines:  engines,
 		Prompts:  &vaultPromptBuilder{store: st, vault: vault, clock: clk, tz: cfg.TZ},
 		Vault:    vault,
@@ -251,12 +270,12 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 				})
 			}
 		},
-		PostRunAudit: func(actx context.Context, runID domain.ID, slug string) []string {
-			touched, _, err := scopeaudit.Audit(actx, cfg.VaultDir, filepath.Join(quarantineBase, runID), domain.AgentScope{Slug: slug})
+		PostRunAuditFull: func(actx context.Context, runID domain.ID, scope domain.AgentScope) ([]string, int) {
+			touched, violations, err := scopeaudit.Audit(actx, cfg.VaultDir, filepath.Join(quarantineBase, runID), scope)
 			if err != nil {
-				return nil
+				return nil, 0
 			}
-			return touched
+			return touched, len(violations)
 		},
 	})
 	runSvc.SetPermission(runapp.NewPermissionFunc(runapp.PermissionDeps{
@@ -287,7 +306,8 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 		},
 	})
 
-	sched := scheduler.New(st, actors, apprSvc, disp.Notify)
+	tzLoc, _ := time.LoadLocation(cfg.TZ)
+	sched := scheduler.New(st, actors, apprSvc, disp.Notify).WithCoord(coordSvc).WithRoutines(vault, tzLoc, ids)
 	chatSvc := chat.NewService(st, actors, clk, ids, func(runID domain.ID) string {
 		snap, _, cancel := hub.RunText(runID)
 		cancel()
