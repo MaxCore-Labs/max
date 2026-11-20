@@ -19,6 +19,10 @@ func main() {
 			time.Sleep(time.Hour)
 		}
 	}
+	if len(os.Args) > 1 && os.Args[1] == "acp" {
+		runACPMode(os.Args[1:])
+		return
+	}
 	scriptPath := os.Getenv("FAKECLI_SCRIPT")
 	if scriptPath == "" {
 		os.Exit(0)

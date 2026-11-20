@@ -1,0 +1,1087 @@
+openapi: 3.0.3
+info:
+  title: Max Assistant API
+  version: 0.1.0
+servers:
+  - url: /
+paths:
+  /api/v1/healthz:
+    get:
+      operationId: healthz
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResp"
+        "429":
+          $ref: "#/components/responses/ErrorResp"
+        "503":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      responses:
+        "204":
+          description: Logged out
+
+  /api/v1/auth/me:
+    get:
+      operationId: getMe
+      responses:
+        "200":
+          description: Current authenticated owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+
+  /api/v1/auth/password:
+    post:
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: Password updated
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "401":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/threads:
+    get:
+      operationId: listThreads
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Paginated threads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThreadListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+    post:
+      operationId: createThread
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateThreadRequest"
+      responses:
+        "201":
+          description: Thread created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+
+  /api/v1/threads/{threadId}:
+    get:
+      operationId: getThread
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Thread snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThreadSnapshot"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/threads/{threadId}/messages:
+    get:
+      operationId: listMessages
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+        - name: before
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+    post:
+      operationId: sendMessage
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "202":
+          description: Message accepted and agent woken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendMessageResponse"
+
+  /api/v1/threads/{threadId}/reset:
+    post:
+      operationId: resetThread
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "204":
+          description: Conversation sessions cleared
+
+  /api/v1/runs:
+    get:
+      operationId: listRuns
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/runs/{runId}:
+    get:
+      operationId: getRun
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/runs/{runId}/events:
+    get:
+      operationId: listRunEvents
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Paginated run events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunEventListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/runs/{runId}/cancel:
+    post:
+      operationId: cancelRun
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelRunRequest"
+      responses:
+        "200":
+          description: Run cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+
+  /api/v1/runs/{runId}/stream:
+    get:
+      operationId: streamRun
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Live run text SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/v1/approvals:
+    get:
+      operationId: listApprovals
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated approvals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/approvals/{approvalId}/decide:
+    post:
+      operationId: decideApproval
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideApprovalRequest"
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Approval"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "409":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/inbox:
+    get:
+      operationId: listInbox
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Paginated inbox items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/inbox/{itemId}/read:
+    post:
+      operationId: markInboxRead
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Marked read
+
+  /api/v1/inbox/{itemId}/answer:
+    post:
+      operationId: answerOwnerQuestion
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerQuestionRequest"
+      responses:
+        "200":
+          description: Answer recorded and agent woken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxItem"
+
+  /api/v1/usage:
+    get:
+      operationId: getUsage
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/CursorParam"
+      responses:
+        "200":
+          description: Daily usage breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/quota:
+    get:
+      operationId: getQuota
+      responses:
+        "200":
+          description: Engine quota windows and learned ceilings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotaResponse"
+    put:
+      operationId: updateQuotaSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuotaSettingsRequest"
+      responses:
+        "200":
+          description: Updated quota settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotaResponse"
+
+  /api/v1/status:
+    get:
+      operationId: getStatus
+      responses:
+        "200":
+          description: Live engine, queue, and dependency status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/v1/settings:
+    get:
+      operationId: getSettings
+      responses:
+        "200":
+          description: Engine and slot settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsResponse"
+    put:
+      operationId: updateSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+      responses:
+        "200":
+          description: Settings saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/events:
+    get:
+      operationId: streamEvents
+      parameters:
+        - name: topics
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Topic-filtered SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+security:
+  - cookieAuth: []
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: max_session
+
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+    CursorParam:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    IdempotencyKeyParam:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+
+  responses:
+    ErrorResp:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+
+    HealthResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    UserResponse:
+      type: object
+      required: [id, username, totpEnabled]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        totpEnabled:
+          type: boolean
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+
+    Thread:
+      type: object
+      required: [id, agentId, title, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        title:
+          type: string
+        lastMsgAt:
+          type: integer
+          format: int64
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+
+    ThreadListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Thread"
+        nextCursor:
+          type: string
+          nullable: true
+
+    CreateThreadRequest:
+      type: object
+      properties:
+        agentId:
+          type: string
+        title:
+          type: string
+
+    BusyInfo:
+      type: object
+      required: [runId, title, minutesRunning]
+      properties:
+        runId:
+          type: string
+        title:
+          type: string
+        minutesRunning:
+          type: integer
+
+    Message:
+      type: object
+      required: [id, threadId, role, content, attachments, createdAt]
+      properties:
+        id:
+          type: string
+        threadId:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+        runId:
+          type: string
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+
+    MessageListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        nextCursor:
+          type: string
+          nullable: true
+
+    ThreadSnapshot:
+      type: object
+      required: [thread, messages]
+      properties:
+        thread:
+          $ref: "#/components/schemas/Thread"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        activeRunId:
+          type: string
+          nullable: true
+        liveText:
+          type: string
+        busyWith:
+          $ref: "#/components/schemas/BusyInfo"
+
+    SendMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+
+    SendMessageResponse:
+      type: object
+      required: [messageId, wakeupId]
+      properties:
+        messageId:
+          type: string
+        wakeupId:
+          type: string
+
+    Run:
+      type: object
+      required: [id, agentId, conversationId, status, priority, engine, model, turns, inputTokens, outputTokens, startedAt]
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        conversationId:
+          type: string
+        taskId:
+          type: string
+          nullable: true
+        status:
+          type: string
+        priority:
+          type: integer
+        engine:
+          type: string
+        model:
+          type: string
+        turns:
+          type: integer
+        inputTokens:
+          type: integer
+          format: int64
+        outputTokens:
+          type: integer
+          format: int64
+        summary:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        startedAt:
+          type: integer
+          format: int64
+        endedAt:
+          type: integer
+          format: int64
+          nullable: true
+
+    RunListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Run"
+        nextCursor:
+          type: string
+          nullable: true
+
+    RunEvent:
+      type: object
+      required: [id, runId, agentId, type, data, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        runId:
+          type: string
+        agentId:
+          type: string
+        type:
+          type: string
+        data:
+          type: string
+        createdAt:
+          type: integer
+          format: int64
+
+    RunEventListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunEvent"
+        nextCursor:
+          type: string
+          nullable: true
+
+    CancelRunRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [requeue, drop]
+
+    Approval:
+      type: object
+      required: [id, runId, agentId, conversationId, toolName, preview, reason, status, requestedAt, expiresAt]
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        agentId:
+          type: string
+        conversationId:
+          type: string
+        toolName:
+          type: string
+        preview:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+        requestedAt:
+          type: integer
+          format: int64
+        expiresAt:
+          type: integer
+          format: int64
+        decidedAt:
+          type: integer
+          format: int64
+          nullable: true
+
+    ApprovalListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Approval"
+        nextCursor:
+          type: string
+          nullable: true
+
+    DecideApprovalRequest:
+      type: object
+      required: [allow]
+      properties:
+        allow:
+          type: boolean
+
+    InboxItem:
+      type: object
+      required: [id, kind, title, body, choices, urgency, createdAt]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        refKind:
+          type: string
+          nullable: true
+        refId:
+          type: string
+          nullable: true
+        conversationId:
+          type: string
+          nullable: true
+        agentId:
+          type: string
+          nullable: true
+        choices:
+          type: array
+          items:
+            type: string
+        urgency:
+          type: string
+        readAt:
+          type: integer
+          format: int64
+          nullable: true
+        resolvedAt:
+          type: integer
+          format: int64
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+
+    InboxListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InboxItem"
+        nextCursor:
+          type: string
+          nullable: true
+
+    AnswerQuestionRequest:
+      type: object
+      required: [answer]
+      properties:
+        answer:
+          type: string
+
+    DailyUsageRow:
+      type: object
+      required: [day, agentId, teamId, engine, runs, tokens]
+      properties:
+        day:
+          type: string
+        agentId:
+          type: string
+        teamId:
+          type: string
+        engine:
+          type: string
+        runs:
+          type: integer
+        tokens:
+          type: integer
+          format: int64
+
+    UsageResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyUsageRow"
+        nextCursor:
+          type: string
+          nullable: true
+
+    EngineQuotaInfo:
+      type: object
+      required: [engine, usedShort, usedWeek]
+      properties:
+        engine:
+          type: string
+        usedShort:
+          type: integer
+          format: int64
+        usedWeek:
+          type: integer
+          format: int64
+        estShort:
+          type: integer
+          format: int64
+          nullable: true
+        estWeek:
+          type: integer
+          format: int64
+          nullable: true
+        limitedUntil:
+          type: integer
+          format: int64
+          nullable: true
+
+    QuotaResponse:
+      type: object
+      required: [shortHours, backgroundShare, engines]
+      properties:
+        shortHours:
+          type: integer
+        backgroundShare:
+          type: number
+          format: double
+        engines:
+          type: array
+          items:
+            $ref: "#/components/schemas/EngineQuotaInfo"
+
+    UpdateQuotaSettingsRequest:
+      type: object
+      properties:
+        shortHours:
+          type: integer
+        backgroundShare:
+          type: number
+          format: double
+        estShortTokens:
+          type: integer
+          format: int64
+          nullable: true
+        estWeekTokens:
+          type: integer
+          format: int64
+          nullable: true
+
+    EngineStatusItem:
+      type: object
+      required: [name, enabled, installed, loggedIn, slots, used]
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        installed:
+          type: boolean
+        loggedIn:
+          type: boolean
+        version:
+          type: string
+        slots:
+          type: integer
+        used:
+          type: integer
+        limitedUntil:
+          type: integer
+          format: int64
+          nullable: true
+
+    QueueSummary:
+      type: object
+      required: [total, byPriority]
+      properties:
+        total:
+          type: integer
+        byPriority:
+          type: object
+          additionalProperties:
+            type: integer
+
+    StatusResponse:
+      type: object
+      required: [engines, queue, deps]
+      properties:
+        engines:
+          type: array
+          items:
+            $ref: "#/components/schemas/EngineStatusItem"
+        queue:
+          $ref: "#/components/schemas/QueueSummary"
+        deps:
+          type: object
+          additionalProperties:
+            type: string
+
+    EngineSettingItem:
+      type: object
+      required: [name, enabled, slots, defaultModel]
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        slots:
+          type: integer
+        defaultModel:
+          type: string
+
+    SettingsResponse:
+      type: object
+      required: [defaultEngine, engines]
+      properties:
+        defaultEngine:
+          type: string
+        engines:
+          type: array
+          items:
+            $ref: "#/components/schemas/EngineSettingItem"
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        defaultEngine:
+          type: string
+        engines:
+          type: array
+          items:
+            $ref: "#/components/schemas/EngineSettingItem"

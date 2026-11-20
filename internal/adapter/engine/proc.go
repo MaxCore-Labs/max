@@ -22,6 +22,7 @@ type ProcSpec struct {
 	Bin                string
 	Args, Env          []string
 	Dir                string
+	Stderr             io.Writer
 	IdleTimeout, Grace time.Duration
 }
 
@@ -62,7 +63,11 @@ func Start(ctx context.Context, s ProcSpec) (*Proc, io.WriteCloser, <-chan []byt
 		_ = stdinPipe.Close()
 		return nil, nil, nil, nil, fmt.Errorf("stdout pipe: %w", err)
 	}
-	cmd.Stderr = io.Discard
+	if s.Stderr != nil {
+		cmd.Stderr = s.Stderr
+	} else {
+		cmd.Stderr = io.Discard
+	}
 
 	if err := cmd.Start(); err != nil {
 		_ = stdinPipe.Close()

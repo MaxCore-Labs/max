@@ -205,6 +205,47 @@ type ApprovalRecord struct {
 	DecidedAt      *int64
 }
 
+// ThreadRecord represents a row in the threads table.
+type ThreadRecord struct {
+	ID                domain.ID
+	AgentID           domain.ID
+	Title             string
+	LearnedThroughMsg *domain.ID
+	LastMsgAt         *int64
+	CreatedAt         int64
+	UpdatedAt         int64
+}
+
+// MessageRecord represents a row in the messages table.
+type MessageRecord struct {
+	ID              domain.ID
+	ThreadID        domain.ID
+	Role            string
+	Content         string
+	AttachmentsJSON string
+	RunID           *domain.ID
+	IdempotencyKey  *string
+	CreatedAt       int64
+}
+
+// UserRecord represents a row in the users table.
+type UserRecord struct {
+	ID           domain.ID
+	Username     string
+	PasswordHash string
+	TOTPEnabled  bool
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
+// AuthSessionRecord represents a row in the auth_sessions table.
+type AuthSessionRecord struct {
+	TokenHash string
+	UserID    domain.ID
+	ExpiresAt int64
+	CreatedAt int64
+}
+
 // OutboxRecord represents a row in the outbox table.
 type OutboxRecord struct {
 	ID            int64
@@ -230,5 +271,27 @@ type InboxItemRecord struct {
 	ChoicesJSON    string
 	Urgency        string
 	DedupeKey      *string
+	ReadAt         *int64
+	ResolvedAt     *int64
 	CreatedAt      int64
+}
+
+// DailyUsageRecord represents a row in usage_daily.
+type DailyUsageRecord struct {
+	Day     string
+	AgentID domain.ID
+	TeamID  domain.ID
+	Engine  domain.EngineName
+	Runs    int
+	Tokens  int64
+}
+
+// AuditLogRecord represents an append-only row in audit_log.
+type AuditLogRecord struct {
+	ID         int64
+	TS         int64
+	Actor      string
+	Action     string
+	Ref        string
+	DetailJSON string
 }

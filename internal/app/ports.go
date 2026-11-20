@@ -40,7 +40,9 @@ func (UUIDv7Gen) New() domain.ID {
 type Reader interface {
 	GetKV(ctx context.Context, key string) (val string, ok bool, err error)
 	GetAgent(ctx context.Context, id domain.ID) (AgentRecord, bool, error)
+	GetAgentBySlug(ctx context.Context, slug string) (AgentRecord, bool, error)
 	GetTeam(ctx context.Context, id domain.ID) (TeamRecord, bool, error)
+	GetTeamBySlug(ctx context.Context, slug string) (TeamRecord, bool, error)
 	GetConversation(ctx context.Context, id domain.ID) (ConversationRecord, bool, error)
 	GetTask(ctx context.Context, id domain.ID) (TaskRecord, bool, error)
 	GetRun(ctx context.Context, id domain.ID) (RunRecord, bool, error)
@@ -55,6 +57,25 @@ type Reader interface {
 	CountQuestionsByRun(ctx context.Context, runID domain.ID) (int, error)
 	GetApproval(ctx context.Context, id domain.ID) (ApprovalRecord, bool, error)
 	FindPendingApproval(ctx context.Context, agentID domain.ID, toolName, inputHash string) (ApprovalRecord, bool, error)
+	GetQuotaWindowTokens(ctx context.Context, engine domain.EngineName, window string, windowStartMs int64) (tokens int64, runs int, err error)
+	CountQuotaLedgerRows(ctx context.Context, engine domain.EngineName, window string) (int, error)
+	CountFutureQuotaLedgerRows(ctx context.Context, afterMs int64) (int, error)
+	GetOwnerUser(ctx context.Context) (UserRecord, bool, error)
+	GetUserByID(ctx context.Context, id domain.ID) (UserRecord, bool, error)
+	GetAuthSession(ctx context.Context, tokenHash string) (AuthSessionRecord, bool, error)
+	ListAllAuthSessionHashes(ctx context.Context) ([]string, error)
+	GetThread(ctx context.Context, id domain.ID) (ThreadRecord, bool, error)
+	ListThreads(ctx context.Context, limit int, beforeUpdatedMs *int64, beforeID string) ([]ThreadRecord, error)
+	GetConversationByThread(ctx context.Context, agentID, threadID domain.ID) (ConversationRecord, bool, error)
+	GetMessageByIdem(ctx context.Context, idemKey string) (MessageRecord, bool, error)
+	ListThreadMessages(ctx context.Context, threadID domain.ID, limit int, beforeCreatedMs *int64, beforeID string) ([]MessageRecord, error)
+	GetInboxItem(ctx context.Context, id domain.ID) (InboxItemRecord, bool, error)
+	ListApprovalsPage(ctx context.Context, status string, limit int, beforeTS *int64, beforeID string) ([]ApprovalRecord, error)
+	ListInboxPage(ctx context.Context, unreadOnly bool, limit int, beforeTS *int64, beforeID string) ([]InboxItemRecord, error)
+	ListRunsPage(ctx context.Context, agentID, status string, limit int, beforeTS *int64, beforeID string) ([]RunRecord, error)
+	ListUsagePage(ctx context.Context, sinceDay string, limit int, offset int) ([]DailyUsageRecord, error)
+	CountQueuedByPriority(ctx context.Context) (map[int]int, error)
+	ListAuditLogs(ctx context.Context, limit int) ([]AuditLogRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -62,7 +83,10 @@ type Tx interface {
 	Reader
 	UpsertKV(ctx context.Context, key, val string, updatedAt int64) error
 	InsertTeam(ctx context.Context, t TeamRecord) error
+	EnsureTeamBySlug(ctx context.Context, slug, newID string) (domain.ID, error)
 	InsertAgent(ctx context.Context, a AgentRecord) error
+	UpsertSyncedAgent(ctx context.Context, a AgentRecord) error
+	SetAgentManager(ctx context.Context, agentID domain.ID, managerID *domain.ID) error
 	SetAgentCooldown(ctx context.Context, agentID domain.ID, cooldownUntil int64) error
 	SetAgentLastRunAt(ctx context.Context, agentID domain.ID, lastRunAt int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error
@@ -88,6 +112,9 @@ type Tx interface {
 	FinishWakeupsForRun(ctx context.Context, runID domain.ID, status string) error
 	RequeueWakeupsForRun(ctx context.Context, runID domain.ID, refundAttempt bool) error
 	UpsertQuotaLimit(ctx context.Context, engine domain.EngineName, limitedUntil, nowMs int64) error
+	AddQuotaLedgerUsage(ctx context.Context, engine domain.EngineName, window string, windowStartMs, tokens int64) error
+	AddDailyUsage(ctx context.Context, day string, agentID, teamID domain.ID, engine domain.EngineName, tokens int64) error
+	SaveLearnedQuotaState(ctx context.Context, qs QuotaStateRecord) error
 	InsertInboxItem(ctx context.Context, item InboxItemRecord) error
 	InsertOutbox(ctx context.Context, rec OutboxRecord) error
 	InsertApproval(ctx context.Context, ap ApprovalRecord) error
@@ -95,6 +122,21 @@ type Tx interface {
 	ConsumeAllowedApproval(ctx context.Context, agentID domain.ID, toolName, inputHash string, nowMs int64) (bool, error)
 	ListExpiredPendingApprovals(ctx context.Context, nowMs int64) ([]ApprovalRecord, error)
 	ResolveInboxByRef(ctx context.Context, refKind, refID string, resolvedAt int64) error
+	PromoteDueWakeups(ctx context.Context, nowMs int64) (int, error)
+	ReconcileTeamRunning(ctx context.Context) error
+	PruneTerminalWakeupsBefore(ctx context.Context, cutoffMs int64, limit int) (int, error)
+	SetTeamRunningRaw(ctx context.Context, teamID domain.ID, running int) error
+	UpsertOwnerUser(ctx context.Context, u UserRecord) error
+	InsertAuthSession(ctx context.Context, s AuthSessionRecord) error
+	DeleteAuthSession(ctx context.Context, tokenHash string) error
+	InsertThread(ctx context.Context, th ThreadRecord) error
+	TouchThread(ctx context.Context, threadID domain.ID, msgAt int64) error
+	EnsureThreadConversation(ctx context.Context, agentID, threadID, newConvID domain.ID) (domain.ID, error)
+	ResetThreadConversation(ctx context.Context, agentID, threadID domain.ID) error
+	InsertMessage(ctx context.Context, m MessageRecord) error
+	MarkInboxItemRead(ctx context.Context, id domain.ID, readAt int64) error
+	ResolveInboxItem(ctx context.Context, id domain.ID, resolvedAt int64) error
+	AppendAuditLog(ctx context.Context, rec AuditLogRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 
@@ -117,6 +159,7 @@ type Vault interface {
 	PullIfIdle(ctx context.Context, runsActive int) error
 	Push(ctx context.Context) error
 	Read(ctx context.Context, rel string) ([]byte, error)
+	ListDir(ctx context.Context, rel string) ([]string, error)
 	RefuseIfProjectSettings(ctx context.Context) error
 }
 
