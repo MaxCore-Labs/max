@@ -16,10 +16,21 @@ const drainBatchCap = 20
 // Claimed describes a run claimed inside ClaimBatch and ready to be spawned outside the DB transaction.
 type Claimed = app.Claimed
 
-// Capacity conveys available engine process slots and subscription quota admission at dispatch time.
+// Capacity conveys available engine process slots, subscription quota admission, and per-agent/team fairness gates.
 type Capacity struct {
-	Free  map[domain.EngineName]int
-	Admit func(domain.EngineName, domain.Priority) domain.Admission
+	Free         map[domain.EngineName]int
+	Admit        func(domain.EngineName, domain.Priority) domain.Admission
+	AgentAllowed func(ctx context.Context, agentID, teamID domain.ID, now time.Time) (bool, string)
+}
+
+func (s *Service) nextFairStamp(nowMs int64) int64 {
+	for {
+		prev := s.lastStamp.Load()
+		next := max(nowMs, prev+1)
+		if s.lastStamp.CompareAndSwap(prev, next) {
+			return next
+		}
+	}
 }
 
 // ClaimBatch atomically claims ready agents, drains up to 20 wakeups of a single conversation per agent,
@@ -47,7 +58,7 @@ func (s *Service) ClaimBatch(ctx context.Context, cap Capacity, now time.Time) (
 	var out []Claimed
 
 	err := s.store.WithTx(ctx, func(tx app.Tx) error {
-		cands, err := tx.ListCandidateAgents(ctx, nowMs, mask, totalFree*3)
+		cands, err := tx.ListCandidateAgents(ctx, nowMs, mask, max(totalFree*6, 32))
 		if err != nil {
 			return err
 		}
@@ -73,6 +84,12 @@ func (s *Service) ClaimBatch(ctx context.Context, cap Capacity, now time.Time) (
 			}
 			if cand.CooldownUntil > nowMs && top.Priority < domain.PrioInteractive {
 				continue
+			}
+			if cap.AgentAllowed != nil {
+				allowed, reason := cap.AgentAllowed(ctx, cand.ID, cand.TeamID, now)
+				if !allowed && (top.Priority < domain.PrioInteractive || reason != "runs_per_hour_cap") {
+					continue
+				}
 			}
 
 			origConvID := top.ConversationID
@@ -147,6 +164,9 @@ func (s *Service) ClaimBatch(ctx context.Context, cap Capacity, now time.Time) (
 				return fmt.Errorf("insert claimed run: %w", err)
 			}
 			if err := tx.SetAgentActiveRun(ctx, cand.ID, &runID); err != nil {
+				return err
+			}
+			if err := tx.SetAgentLastRunAt(ctx, cand.ID, s.nextFairStamp(nowMs)); err != nil {
 				return err
 			}
 			if err := tx.AdjustTeamRunning(ctx, cand.TeamID, 1); err != nil {

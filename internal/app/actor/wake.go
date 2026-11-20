@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"max/internal/app"
@@ -35,10 +36,11 @@ type Wakeup = app.Wakeup
 
 // Service manages durable agent mailboxes, fair claiming, and crash recovery.
 type Service struct {
-	store  app.Store
-	clock  app.Clock
-	ids    app.IDGen
-	notify chan struct{}
+	store     app.Store
+	clock     app.Clock
+	ids       app.IDGen
+	notify    chan struct{}
+	lastStamp atomic.Int64
 }
 
 // NewService constructs an actor Service.

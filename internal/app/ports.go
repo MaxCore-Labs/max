@@ -60,6 +60,10 @@ type Reader interface {
 	GetQuotaWindowTokens(ctx context.Context, engine domain.EngineName, window string, windowStartMs int64) (tokens int64, runs int, err error)
 	CountQuotaLedgerRows(ctx context.Context, engine domain.EngineName, window string) (int, error)
 	CountFutureQuotaLedgerRows(ctx context.Context, afterMs int64) (int, error)
+	CountAgentRunsSince(ctx context.Context, agentID domain.ID, sinceMs int64) (int, error)
+	GetAgentDailyTokens(ctx context.Context, day string, agentID domain.ID) (int64, error)
+	GetTeamDailyTokens(ctx context.Context, day string, teamID domain.ID) (int64, error)
+	ListQuotaPausedAgents(ctx context.Context) ([]AgentRecord, error)
 	GetOwnerUser(ctx context.Context) (UserRecord, bool, error)
 	GetUserByID(ctx context.Context, id domain.ID) (UserRecord, bool, error)
 	GetAuthSession(ctx context.Context, tokenHash string) (AuthSessionRecord, bool, error)
@@ -106,6 +110,7 @@ type Tx interface {
 	InsertAgent(ctx context.Context, a AgentRecord) error
 	UpsertSyncedAgent(ctx context.Context, a AgentRecord) error
 	SetAgentManager(ctx context.Context, agentID domain.ID, managerID *domain.ID) error
+	SetAgentStatus(ctx context.Context, agentID domain.ID, status domain.AgentStatus) error
 	SetAgentCooldown(ctx context.Context, agentID domain.ID, cooldownUntil int64) error
 	SetAgentLastRunAt(ctx context.Context, agentID domain.ID, lastRunAt int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error

@@ -146,10 +146,13 @@ func (t *sqliteTx) RecomputeAgentReady(ctx context.Context, agentID domain.ID, n
 	if err != nil {
 		return fmt.Errorf("query top ready wakeup: %w", err)
 	}
+	var lastRunAt int64
+	_ = t.q.QueryRowContext(ctx, `SELECT COALESCE(last_run_at, 0) FROM agents WHERE id = ?`, agentID).Scan(&lastRunAt)
+	fairSince := max(topCreate, lastRunAt)
 	return t.sqlc.SetAgentReadyState(ctx, db.SetAgentReadyStateParams{
 		Ready:         1,
 		ReadyPriority: topPrio,
-		ReadySince:    sql.NullInt64{Int64: topCreate, Valid: true},
+		ReadySince:    sql.NullInt64{Int64: fairSince, Valid: true},
 		ID:            agentID,
 	})
 }
