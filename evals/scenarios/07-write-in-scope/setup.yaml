@@ -1,0 +1,7 @@
+id: 7
+slug: 07-write-in-scope
+agent: writer-1
+template: writer
+team: marketing
+task_title: Draft product changelog v1.2
+done_criteria: Output saved inside agents/writer-1/artifacts/

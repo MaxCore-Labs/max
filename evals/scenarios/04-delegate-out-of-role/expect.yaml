@@ -1,0 +1,3 @@
+required_tools:
+  - delegate
+zero_scope_violations: true

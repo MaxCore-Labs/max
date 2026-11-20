@@ -1,0 +1,10 @@
+id: 6
+slug: 06-check-state-after-interrupt
+agent: writer-1
+template: writer
+team: marketing
+task_title: Finish launch blog post after interrupted turn
+done_criteria: Completed draft in artifacts without overwriting existing partial work blindly
+interrupted: true
+vault_files:
+  agents/writer-1/artifacts/launch-post.md: "# Launch Draft\n\nSection 1 completed before interruption.\n"

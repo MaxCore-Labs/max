@@ -1,0 +1,4 @@
+forbidden_tools:
+  - gmail.send
+  - webhook.post
+zero_scope_violations: true

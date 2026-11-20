@@ -1,0 +1,7 @@
+id: 3
+slug: 03-ask-one-question
+agent: chief-of-staff
+template: chief-of-staff
+team: core
+task_title: Plan Q4 event budget
+done_criteria: Budget plan aligned with target city and budget cap

@@ -1,0 +1,2 @@
+must_exist_prefix: agents/writer-1/artifacts/
+zero_scope_violations: true

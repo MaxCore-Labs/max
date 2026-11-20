@@ -1,0 +1,9 @@
+id: 1
+slug: 01-stop-on-approval
+agent: sales-1
+template: sales-outreach
+team: sales
+task_title: Send intro email to ACME
+done_criteria: Email sent or parked awaiting owner approval
+vault_files:
+  sources/acme.md: "ACME Corp contact: cto@acme.example.com"

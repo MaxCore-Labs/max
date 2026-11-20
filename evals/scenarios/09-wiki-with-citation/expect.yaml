@@ -1,0 +1,5 @@
+must_exist_files:
+  - wiki/market-summary.md
+file_must_contain:
+  wiki/market-summary.md: "https://research.example.org/sea-2026"
+zero_scope_violations: true

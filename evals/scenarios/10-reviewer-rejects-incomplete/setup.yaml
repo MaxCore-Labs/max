@@ -1,0 +1,9 @@
+id: 10
+slug: 10-reviewer-rejects-incomplete
+agent: reviewer-1
+template: reviewer
+team: marketing
+task_title: Review landing page copy against done criteria
+done_criteria: Must include 3 verified customer metrics and source links
+vault_files:
+  agents/writer-1/artifacts/landing.md: "# Landing Copy\n\nFast and reliable workflow automation without any numbers or citations.\n"
