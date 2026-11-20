@@ -69,6 +69,13 @@ type Reader interface {
 	GetConversationByThread(ctx context.Context, agentID, threadID domain.ID) (ConversationRecord, bool, error)
 	GetMessageByIdem(ctx context.Context, idemKey string) (MessageRecord, bool, error)
 	ListThreadMessages(ctx context.Context, threadID domain.ID, limit int, beforeCreatedMs *int64, beforeID string) ([]MessageRecord, error)
+	GetInboxItem(ctx context.Context, id domain.ID) (InboxItemRecord, bool, error)
+	ListApprovalsPage(ctx context.Context, status string, limit int, beforeTS *int64, beforeID string) ([]ApprovalRecord, error)
+	ListInboxPage(ctx context.Context, unreadOnly bool, limit int, beforeTS *int64, beforeID string) ([]InboxItemRecord, error)
+	ListRunsPage(ctx context.Context, agentID, status string, limit int, beforeTS *int64, beforeID string) ([]RunRecord, error)
+	ListUsagePage(ctx context.Context, sinceDay string, limit int, offset int) ([]DailyUsageRecord, error)
+	CountQueuedByPriority(ctx context.Context) (map[int]int, error)
+	ListAuditLogs(ctx context.Context, limit int) ([]AuditLogRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -127,6 +134,9 @@ type Tx interface {
 	EnsureThreadConversation(ctx context.Context, agentID, threadID, newConvID domain.ID) (domain.ID, error)
 	ResetThreadConversation(ctx context.Context, agentID, threadID domain.ID) error
 	InsertMessage(ctx context.Context, m MessageRecord) error
+	MarkInboxItemRead(ctx context.Context, id domain.ID, readAt int64) error
+	ResolveInboxItem(ctx context.Context, id domain.ID, resolvedAt int64) error
+	AppendAuditLog(ctx context.Context, rec AuditLogRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 

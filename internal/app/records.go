@@ -271,5 +271,27 @@ type InboxItemRecord struct {
 	ChoicesJSON    string
 	Urgency        string
 	DedupeKey      *string
+	ReadAt         *int64
+	ResolvedAt     *int64
 	CreatedAt      int64
+}
+
+// DailyUsageRecord represents a row in usage_daily.
+type DailyUsageRecord struct {
+	Day     string
+	AgentID domain.ID
+	TeamID  domain.ID
+	Engine  domain.EngineName
+	Runs    int
+	Tokens  int64
+}
+
+// AuditLogRecord represents an append-only row in audit_log.
+type AuditLogRecord struct {
+	ID         int64
+	TS         int64
+	Actor      string
+	Action     string
+	Ref        string
+	DetailJSON string
 }
