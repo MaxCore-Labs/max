@@ -133,7 +133,8 @@ func TestListAgentsFilters(t *testing.T) {
 	env := newPhase2APIEnv(t)
 	r1, r2 := "researcher", "writer"
 	if err := env.st.WithTx(ctx, func(tx app.Tx) error {
-		if err := tx.InsertTeam(ctx, app.TeamRecord{ID: "tm-mkt", Slug: "marketing", Name: "Marketing", MaxRunning: 2, Status: "active"}); err != nil {
+		mktID, err := tx.EnsureTeamBySlug(ctx, "marketing", "tm-mkt")
+		if err != nil {
 			return err
 		}
 		for i := 1; i <= 4; i++ {
@@ -145,7 +146,7 @@ func TestListAgentsFilters(t *testing.T) {
 			}
 			if err := tx.InsertAgent(ctx, app.AgentRecord{
 				ID: fmt.Sprintf("ag-mkt-%d", i), Slug: fmt.Sprintf("mkt-agent-%02d", i),
-				Name: fmt.Sprintf("Alpha Market %d", i), TemplateSlug: tpl, TeamID: "tm-mkt",
+				Name: fmt.Sprintf("Alpha Market %d", i), TemplateSlug: tpl, TeamID: mktID,
 				EnginesJSON: `["agy"]`, EngineMask: 4, Autonomy: domain.AutonomyAuto, Browser: domain.BrowserNone,
 				ConfigRev: "rev", Status: st,
 			}); err != nil {
