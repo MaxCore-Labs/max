@@ -56,6 +56,7 @@ type Deps struct {
 	Clock           app.Clock
 	IDs             app.IDGen
 	WallTimeout     time.Duration
+	Cooldown        *time.Duration
 	FinalizeBackoff time.Duration
 }
 

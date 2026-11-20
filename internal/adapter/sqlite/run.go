@@ -248,8 +248,9 @@ func (t *sqliteTx) InsertRunEvent(ctx context.Context, ev app.RunEventRecord) er
 
 func (t *sqliteTx) FinishWakeupsForRun(ctx context.Context, runID domain.ID, status string) error {
 	_, err := t.q.ExecContext(ctx, `
-		UPDATE wakeups SET status = ?
-		WHERE run_id = ? AND status = 'claimed'`, status, runID)
+		UPDATE wakeups
+		SET status = ?, run_id = CASE WHEN ? = 'dropped' THEN NULL ELSE run_id END
+		WHERE run_id = ? AND status = 'claimed'`, status, status, runID)
 	if err != nil {
 		return fmt.Errorf("finish wakeups for run %q: %w", runID, err)
 	}

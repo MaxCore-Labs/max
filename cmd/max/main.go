@@ -35,6 +35,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runHealthcheck(stdout, stderr)
 	case "engine":
 		return runEngineCmd(args[1:], stdout, stderr)
+	case "loadtest":
+		return runLoadtest(args[1:], stdout, stderr)
 	case "admin":
 		return runAdmin(args[1:], os.Stdin, stdout, stderr)
 	case "mcp":

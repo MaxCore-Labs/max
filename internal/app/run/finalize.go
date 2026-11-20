@@ -252,8 +252,14 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 			return err
 		}
 		if runRec.Priority < domain.PrioInteractive {
-			if err := tx.SetAgentCooldown(ctx, runRec.AgentID, now.Add(defaultCooldown).UnixMilli()); err != nil {
-				return err
+			cd := defaultCooldown
+			if s.deps.Cooldown != nil {
+				cd = *s.deps.Cooldown
+			}
+			if cd > 0 {
+				if err := tx.SetAgentCooldown(ctx, runRec.AgentID, now.Add(cd).UnixMilli()); err != nil {
+					return err
+				}
 			}
 		}
 		if err := tx.AdjustTeamRunning(ctx, ag.TeamID, -1); err != nil {

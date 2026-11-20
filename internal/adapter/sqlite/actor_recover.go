@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"max/internal/app"
 	"max/internal/domain"
@@ -54,24 +55,26 @@ func (t *sqliteTx) DrainDueWakeupsForConv(
 		return nil, err
 	}
 
+	if len(drained) == 0 {
+		return drained, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(drained)), ",")
+	args := make([]any, 0, 3+len(drained))
+	args = append(args, runID, targetConvID, agentID)
 	for i := range drained {
 		w := &drained[i]
-		_, err := t.q.ExecContext(ctx, `
-			UPDATE wakeups
-			SET status = 'claimed',
-			    run_id = ?,
-			    attempts = attempts + 1,
-			    conversation_id = ?
-			WHERE agent_id = ? AND id = ?`,
-			runID, targetConvID, agentID, w.ID,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("mark wakeup %q claimed: %w", w.ID, err)
-		}
+		args = append(args, w.ID)
 		w.Status = "claimed"
 		w.RunID = &runID
 		w.Attempts++
 		w.ConversationID = &targetConvID
+	}
+	_, err = t.q.ExecContext(ctx,
+		`UPDATE wakeups SET status = 'claimed', run_id = ?, attempts = attempts + 1, conversation_id = ? WHERE agent_id = ? AND id IN (`+placeholders+`)`,
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("mark %d wakeups claimed: %w", len(drained), err)
 	}
 	return drained, nil
 }
