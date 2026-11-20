@@ -206,7 +206,10 @@ func (d *Driver) handleACPPermission(
 	merged := mergeToolCache(cached, p.ToolCall.Kind, p.ToolCall.Name, p.ToolCall.Title, p.ToolCall.RawInput)
 
 	allow := false
-	if isKnownACPKind(merged.Kind) && merged.Name != "" {
+	if strings.HasPrefix(merged.Name, "mcp_max_") {
+		// Per Spike S0c: Max's own MCP server enforces MAX_RUN_TOKEN + peer PID + domain.Decide per tool.
+		allow = true
+	} else if isKnownACPKind(merged.Kind) && merged.Name != "" {
 		if perm != nil {
 			dec := perm(ctx, app.ToolAsk{
 				RunToken: spec.RunToken,

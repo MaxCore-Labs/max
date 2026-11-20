@@ -142,25 +142,7 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 		engines, binPaths = defaultEngines(cfg)
 	}
 
-	activeSlots := make(map[domain.EngineName]int, len(engines))
-	if len(cfg.Engines) > 0 {
-		for _, name := range cfg.Engines {
-			if n, ok := cfg.Slots[name]; ok && n > 0 {
-				activeSlots[name] = n
-			} else {
-				activeSlots[name] = 3
-			}
-		}
-	} else {
-		for name := range engines {
-			if n, ok := cfg.Slots[name]; ok && n > 0 {
-				activeSlots[name] = n
-			} else {
-				activeSlots[name] = 3
-			}
-		}
-	}
-	slots := limits.NewSlots(activeSlots, nil)
+	slots := limits.NewSlots(resolveActiveSlots(cfg, engines), nil)
 	quota := limits.NewQuota(st, clk, limits.QuotaConfig{
 		ShortHours:      cfg.QuotaShortHours,
 		BackgroundShare: cfg.QuotaBackgroundShare,
@@ -222,6 +204,9 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 	if len(sockPath) > 100 {
 		sockPath = filepath.Join(os.TempDir(), fmt.Sprintf("max-%d.sock", os.Getpid()))
 	}
+	if agyDrv, ok := engines[domain.EngineAgy].(*agy.Driver); ok {
+		agyDrv.WithMaxBin("", sockPath)
+	}
 	_ = mcpSrv.StartUnix(ctx, sockPath)
 	quarantineBase := filepath.Join(cfg.DataDir, "quarantine")
 
@@ -236,6 +221,12 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 		VaultDir: cfg.VaultDir,
 		Clock:    clk,
 		IDs:      ids,
+		OnRunStart: func(c actor.Claimed, slug, token string) {
+			registerActiveMCPRun(ctx, st, mcpSrv, c, slug, token)
+		},
+		OnRunEnd: func(runID domain.ID) {
+			mcpSrv.UnregisterRun(runID)
+		},
 		OnEvent: func(c actor.Claimed, ev app.EngineEvent) {
 			if ev.Type != "text_delta" || ev.Text == "" {
 				return

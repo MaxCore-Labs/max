@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -131,12 +130,17 @@ func (s *Service) Send(ctx context.Context, threadID domain.ID, content string, 
 			if found {
 				messageID = existingMsg.ID
 				wakeIdem := "chat-msg:" + trimmedIdem
+				wPayload, _ := json.Marshal(map[string]string{
+					"message_id": messageID,
+					"thread_id":  threadID,
+					"text":       existingMsg.Content,
+				})
 				wID, _, wErr := s.actors.Wake(ctx, tx, actor.WakeInput{
 					AgentID:        th.AgentID,
 					Kind:           domain.WakeMessage,
 					Priority:       domain.PrioInteractive,
 					ConversationID: &convID,
-					Payload:        json.RawMessage(fmt.Sprintf(`{"message_id":%q,"thread_id":%q}`, messageID, threadID)),
+					Payload:        wPayload,
 					IdempotencyKey: &wakeIdem,
 				})
 				wakeupID = wID
@@ -168,12 +172,17 @@ func (s *Service) Send(ctx context.Context, threadID domain.ID, content string, 
 			return err
 		}
 
+		wPayload, _ := json.Marshal(map[string]string{
+			"message_id": messageID,
+			"thread_id":  threadID,
+			"text":       cleanContent,
+		})
 		wID, _, wErr := s.actors.Wake(ctx, tx, actor.WakeInput{
 			AgentID:        th.AgentID,
 			Kind:           domain.WakeMessage,
 			Priority:       domain.PrioInteractive,
 			ConversationID: &convID,
-			Payload:        json.RawMessage(fmt.Sprintf(`{"message_id":%q,"thread_id":%q}`, messageID, threadID)),
+			Payload:        wPayload,
 			IdempotencyKey: wakeIdemPtr,
 		})
 		wakeupID = wID
