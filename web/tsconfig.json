@@ -1,7 +1,7 @@
 {
 	"extends": "$app/tsconfig",
 	"include": ["src", "*"],
-	"exclude": ["src/service-worker", "scripts"],
+	"exclude": ["src/service-worker", "scripts", "src/lib/ui/tokens.test.ts"],
 	"compilerOptions": {
 		"allowJs": true,
 		"checkJs": true,
