@@ -52,13 +52,13 @@ func (r *sqliteReader) GetRun(ctx context.Context, id domain.ID) (app.RunRecord,
 		SELECT id, agent_id, conversation_id, task_id, status, priority, engine, model,
 		       pgid, attempt, turns, input_tokens, output_tokens, cached_read_tokens,
 		       thought_tokens, notional_microusd, touched_paths, error, summary, vault_commit,
-		       started_at, ended_at
+		       config_rev, started_at, ended_at
 		FROM runs WHERE id = ?`, id,
 	).Scan(
 		&rec.ID, &rec.AgentID, &rec.ConversationID, &rec.TaskID, &status, &prio, &engName, &rec.Model,
 		&rec.PGID, &rec.Attempt, &rec.Turns, &rec.InputTokens, &rec.OutputTokens, &rec.CachedReadTokens,
 		&rec.ThoughtTokens, &rec.NotionalMicroUSD, &rec.TouchedPathsJSON, &rec.Error, &rec.Summary, &rec.VaultCommit,
-		&rec.StartedAt, &rec.EndedAt,
+		&rec.ConfigRev, &rec.StartedAt, &rec.EndedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return app.RunRecord{}, false, nil
@@ -165,12 +165,12 @@ func (t *sqliteTx) InsertRun(ctx context.Context, r app.RunRecord) error {
 			id, agent_id, conversation_id, task_id, status, priority, engine, model,
 			pgid, attempt, turns, input_tokens, output_tokens, cached_read_tokens,
 			thought_tokens, notional_microusd, touched_paths, error, summary, vault_commit,
-			started_at, ended_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			config_rev, started_at, ended_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ID, r.AgentID, r.ConversationID, r.TaskID, string(r.Status), int(r.Priority), string(r.Engine), model,
 		r.PGID, attempt, r.Turns, r.InputTokens, r.OutputTokens, r.CachedReadTokens,
 		r.ThoughtTokens, r.NotionalMicroUSD, defaultJSON(r.TouchedPathsJSON, `[]`),
-		r.Error, r.Summary, r.VaultCommit, r.StartedAt, r.EndedAt,
+		r.Error, r.Summary, r.VaultCommit, r.ConfigRev, r.StartedAt, r.EndedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("insert run %q: %w", r.ID, err)
@@ -189,7 +189,7 @@ func (t *sqliteTx) AdjustTeamRunning(ctx context.Context, teamID domain.ID, delt
 
 func (t *sqliteTx) ListCandidateAgents(ctx context.Context, nowMs int64, engineMask, limit int) ([]app.CandidateAgent, error) {
 	rows, err := t.q.QueryContext(ctx, `
-		SELECT a.id, a.team_id, a.engines, a.models, a.cooldown_until, a.ready_priority, t.running, t.max_running
+		SELECT a.id, a.team_id, a.engines, a.models, a.config_rev, a.cooldown_until, a.ready_priority, t.running, t.max_running
 		FROM agents a
 		JOIN teams t ON t.id = a.team_id
 		WHERE a.ready = 1 AND a.active_run_id IS NULL AND a.status = 'active'
@@ -206,7 +206,7 @@ func (t *sqliteTx) ListCandidateAgents(ctx context.Context, nowMs int64, engineM
 	for rows.Next() {
 		var c app.CandidateAgent
 		if err := rows.Scan(
-			&c.ID, &c.TeamID, &c.EnginesJSON, &c.ModelsJSON,
+			&c.ID, &c.TeamID, &c.EnginesJSON, &c.ModelsJSON, &c.ConfigRev,
 			&c.CooldownUntil, &c.ReadyPriority, &c.TeamRunning, &c.TeamMaxRun,
 		); err != nil {
 			return nil, fmt.Errorf("scan candidate agent: %w", err)

@@ -98,6 +98,7 @@ type Tx interface {
 	Reader
 	UpsertKV(ctx context.Context, key, val string, updatedAt int64) error
 	InsertTeam(ctx context.Context, t TeamRecord) error
+	UpsertSyncedTeam(ctx context.Context, t TeamRecord) error
 	EnsureTeamBySlug(ctx context.Context, slug, newID string) (domain.ID, error)
 	InsertAgent(ctx context.Context, a AgentRecord) error
 	UpsertSyncedAgent(ctx context.Context, a AgentRecord) error
@@ -185,6 +186,7 @@ type Vault interface {
 	PullIfIdle(ctx context.Context, runsActive int) error
 	Push(ctx context.Context) error
 	Read(ctx context.Context, rel string) ([]byte, error)
+	Write(ctx context.Context, rel string, data []byte) error
 	ListDir(ctx context.Context, rel string) ([]string, error)
 	RefuseIfProjectSettings(ctx context.Context) error
 }

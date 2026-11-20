@@ -47,6 +47,7 @@ func (v *stubVault) CommitPaths(_ context.Context, paths []string, _ string) (st
 func (v *stubVault) PullIfIdle(context.Context, int) error             { return nil }
 func (v *stubVault) Push(context.Context) error                        { return nil }
 func (v *stubVault) Read(context.Context, string) ([]byte, error)      { return nil, nil }
+func (v *stubVault) Write(context.Context, string, []byte) error       { return nil }
 func (v *stubVault) ListDir(context.Context, string) ([]string, error) { return nil, nil }
 func (v *stubVault) RefuseIfProjectSettings(context.Context) error     { return nil }
 

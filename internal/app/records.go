@@ -26,6 +26,7 @@ type Claimed struct {
 	Wakeups                        []Wakeup
 	SessionID                      string
 	EngineChanged                  bool
+	ConfigRev                      string
 }
 
 // TeamRecord represents a row in the teams table.
@@ -150,6 +151,7 @@ type RunRecord struct {
 	Error            *string
 	Summary          *string
 	VaultCommit      *string
+	ConfigRev        string
 	StartedAt        int64
 	EndedAt          *int64
 }
@@ -180,6 +182,7 @@ type CandidateAgent struct {
 	TeamID        domain.ID
 	EnginesJSON   string
 	ModelsJSON    string
+	ConfigRev     string
 	CooldownUntil int64
 	ReadyPriority int
 	TeamRunning   int

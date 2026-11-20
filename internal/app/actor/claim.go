@@ -141,6 +141,7 @@ func (s *Service) ClaimBatch(ctx context.Context, cap Capacity, now time.Time) (
 				Engine:         eng,
 				Model:          chooseModel(cand.ModelsJSON, eng),
 				Attempt:        maxAttempt,
+				ConfigRev:      cand.ConfigRev,
 				StartedAt:      nowMs,
 			}); err != nil {
 				return fmt.Errorf("insert claimed run: %w", err)
@@ -169,6 +170,7 @@ func (s *Service) ClaimBatch(ctx context.Context, cap Capacity, now time.Time) (
 				Wakeups:        wakeups,
 				SessionID:      sessID,
 				EngineChanged:  changed,
+				ConfigRev:      cand.ConfigRev,
 			})
 		}
 		return nil

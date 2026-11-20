@@ -154,6 +154,32 @@ func (v *Vault) Read(_ context.Context, rel string) ([]byte, error) {
 	return os.ReadFile(cur)
 }
 
+// Write safely writes data to a vault-relative file, refusing symlink traversal along any path component.
+func (v *Vault) Write(_ context.Context, rel string, data []byte) error {
+	clean, ok := domain.CleanRel(rel)
+	if !ok {
+		return fmt.Errorf("invalid vault write path %q", rel)
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	segs := strings.Split(clean, "/")
+	cur := v.dir
+	for i, seg := range segs {
+		cur = filepath.Join(cur, seg)
+		fi, err := os.Lstat(cur)
+		if err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing symlink write at %q", clean)
+		}
+		if i < len(segs)-1 {
+			if err := os.MkdirAll(cur, 0o755); err != nil {
+				return err
+			}
+		}
+	}
+	return os.WriteFile(cur, data, 0o644)
+}
+
 // ListDir returns sorted entry names inside vault-relative directory rel (empty slice if absent).
 func (v *Vault) ListDir(_ context.Context, rel string) ([]string, error) {
 	var target string

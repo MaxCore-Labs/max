@@ -57,6 +57,28 @@ func (t *sqliteTx) EnsureTeamBySlug(ctx context.Context, slug, newID string) (do
 	return newID, nil
 }
 
+func (t *sqliteTx) UpsertSyncedTeam(ctx context.Context, tm app.TeamRecord) error {
+	maxRun := tm.MaxRunning
+	if maxRun <= 0 {
+		maxRun = 2
+	}
+	_, err := t.q.ExecContext(ctx, `
+		INSERT INTO teams (id, slug, name, mandate, max_running, quota_tokens_day, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(slug) DO UPDATE SET
+			name = excluded.name,
+			mandate = excluded.mandate,
+			max_running = excluded.max_running,
+			quota_tokens_day = excluded.quota_tokens_day`,
+		tm.ID, tm.Slug, tm.Name, defaultJSON(tm.MandateJSON, `{}`),
+		maxRun, tm.QuotaTokensDay, defaultJSON(tm.Status, "active"),
+	)
+	if err != nil {
+		return fmt.Errorf("upsert synced team %q: %w", tm.Slug, err)
+	}
+	return nil
+}
+
 func (t *sqliteTx) UpsertSyncedAgent(ctx context.Context, a app.AgentRecord) error {
 	_, err := t.q.ExecContext(ctx, `
 		INSERT INTO agents (
