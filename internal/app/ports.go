@@ -196,6 +196,8 @@ type Tx interface {
 	UpsertRoutineState(ctx context.Context, st RoutineStateRecord) error
 	SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error
 	MarkOutboxSent(ctx context.Context, id int64, sentAt int64) error
+	DeferOutboxUntil(ctx context.Context, id int64, nextAttemptAt int64) error
+	RecordOutboxFailure(ctx context.Context, id int64, attempts int, nextAttemptAt int64, dropSentAt *int64) error
 	SetThreadLearnedThrough(ctx context.Context, threadID, msgID domain.ID) error
 	InsertProposal(ctx context.Context, p ProposalRecord) error
 	UpdateProposalStatus(ctx context.Context, id domain.ID, status string, decidedAt int64) error
@@ -279,6 +281,22 @@ type Browser interface {
 // OutboundInvoker invokes a registered external MCP connection tool outside DB transactions.
 type OutboundInvoker interface {
 	Invoke(ctx context.Context, kind string, decryptedConfig []byte, tool string, input json.RawMessage) (string, error)
+}
+
+// Notification represents a redacted owner alert dispatched from the transactional outbox.
+type Notification struct {
+	ID      string
+	Topic   string
+	Kind    string
+	Title   string
+	Body    string
+	Urgency string
+	LinkURL string
+}
+
+// Notifier delivers owner notifications to external notify-only channels such as Telegram (Spec 8.5.3 & 8.15).
+type Notifier interface {
+	Notify(ctx context.Context, n Notification) error
 }
 
 // EngineEvent is a normalized event emitted by an Engine driver during a run.

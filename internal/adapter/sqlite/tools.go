@@ -74,3 +74,23 @@ func (t *sqliteTx) MarkOutboxSent(ctx context.Context, id int64, sentAt int64) e
 	}
 	return nil
 }
+
+func (t *sqliteTx) DeferOutboxUntil(ctx context.Context, id int64, nextAttemptAt int64) error {
+	_, err := t.q.ExecContext(ctx, `UPDATE outbox SET next_attempt_at = ? WHERE id = ? AND sent_at IS NULL`, nextAttemptAt, id)
+	if err != nil {
+		return fmt.Errorf("defer outbox %d: %w", id, err)
+	}
+	return nil
+}
+
+func (t *sqliteTx) RecordOutboxFailure(ctx context.Context, id int64, attempts int, nextAttemptAt int64, dropSentAt *int64) error {
+	_, err := t.q.ExecContext(ctx, `
+		UPDATE outbox SET attempts = ?, next_attempt_at = ?, sent_at = COALESCE(?, sent_at)
+		WHERE id = ? AND sent_at IS NULL`,
+		attempts, nextAttemptAt, dropSentAt, id,
+	)
+	if err != nil {
+		return fmt.Errorf("record outbox %d failure: %w", id, err)
+	}
+	return nil
+}
