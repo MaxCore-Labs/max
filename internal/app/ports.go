@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -204,4 +205,62 @@ type Tx interface {
 type Store interface {
 	WithTx(ctx context.Context, fn func(tx Tx) error) error
 	Read() Reader
+}
+
+// EngineCaps describes security and protocol capabilities of a CLI driver (Spec 8.4).
+type EngineCaps struct {
+	PreToolGate, ToolAllowlist, Sandbox, PerRunMCP, Resume, StructuredOut bool
+}
+
+// EngineHealth reports binary installation, login state, version, and foreign MCP servers.
+type EngineHealth struct {
+	Installed, LoggedIn bool
+	Version             string
+	ForeignMCP          []string
+}
+
+// RunSpec configures a single non-interactive CLI run.
+type RunSpec struct {
+	RunID, AgentID domain.ID
+	AgentSlug      string
+	Cwd            string
+	AddDirs        []string
+	SystemPrompt   string
+	Prompt         string
+	Model          string
+	SessionID      string
+	RunToken       string
+	Autonomy       domain.Autonomy
+	JSONSchema     string
+}
+
+// EngineEvent is a normalized event emitted by an Engine driver during a run.
+type EngineEvent struct {
+	Type                      string // session | text_delta | tool_call | tool_result | usage | limit | final | error
+	SessionID                 string
+	Text                      string
+	ToolUseID, ToolName       string
+	InputPreview              string
+	ToolOK                    bool
+	InputTokens, OutputTokens int64
+	LimitResetAt              *time.Time
+	ErrKind, ErrMessage       string
+}
+
+// ToolAsk represents an engine pre-tool permission inquiry.
+type ToolAsk struct {
+	RunToken, ToolName string
+	Input              json.RawMessage
+	Path, SearchRoot   string
+}
+
+// PermissionFunc evaluates a pre-tool inquiry synchronously without blocking on human input.
+type PermissionFunc func(ctx context.Context, ask ToolAsk) domain.Decision
+
+// Engine abstracts a headless CLI subscription driver (agy, claude, codex).
+type Engine interface {
+	Name() domain.EngineName
+	Caps() EngineCaps
+	Run(ctx context.Context, spec RunSpec, perm PermissionFunc) (<-chan EngineEvent, error)
+	Health(ctx context.Context) EngineHealth
 }
