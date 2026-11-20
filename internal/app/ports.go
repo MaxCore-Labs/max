@@ -77,6 +77,17 @@ type Reader interface {
 	CountQueuedByPriority(ctx context.Context) (map[int]int, error)
 	ListAuditLogs(ctx context.Context, limit int) ([]AuditLogRecord, error)
 	GetEngineBinary(ctx context.Context, engine domain.EngineName) (EngineBinaryRecord, bool, error)
+	ListTaskBlockers(ctx context.Context, taskID domain.ID) ([]domain.ID, error)
+	ListAllBlockerEdges(ctx context.Context) (map[domain.ID][]domain.ID, error)
+	ListDependents(ctx context.Context, blockerID domain.ID) ([]TaskRecord, error)
+	ListChildTasks(ctx context.Context, parentID domain.ID) ([]TaskRecord, error)
+	ListTaskEvents(ctx context.Context, taskID domain.ID, limit int) ([]TaskEventRecord, error)
+	CountTaskEvents(ctx context.Context, taskID domain.ID) (int, error)
+	CountPairMessagesSince(ctx context.Context, taskID, agentA, agentB domain.ID, sinceMs int64) (int, error)
+	ListScopedTasks(ctx context.Context, f TaskFilter) ([]TaskRecord, error)
+	ListTeamAgents(ctx context.Context, teamID domain.ID) ([]AgentRecord, error)
+	ListWatchdogCandidateTasks(ctx context.Context, staleBeforeMs, nowMs int64) ([]TaskRecord, error)
+	GetConversationByTask(ctx context.Context, agentID, taskID domain.ID) (ConversationRecord, bool, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -140,6 +151,16 @@ type Tx interface {
 	AppendAuditLog(ctx context.Context, rec AuditLogRecord) error
 	UpsertEngineBinary(ctx context.Context, rec EngineBinaryRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
+	EnsureTaskConversation(ctx context.Context, agentID, taskID, newConvID domain.ID) (domain.ID, error)
+	InsertTaskBlocker(ctx context.Context, taskID, blockedBy domain.ID) error
+	CheckoutTaskAtomic(ctx context.Context, taskID, agentID, runID domain.ID, updatedAt int64) (bool, error)
+	UpdateTaskStatus(ctx context.Context, taskID domain.ID, status domain.TaskStatus, reason *domain.BlockedReason, updatedAt int64) error
+	UpdateTaskReviewState(ctx context.Context, taskID domain.ID, status domain.TaskStatus, reviewerID *domain.ID, reviewRounds int, updatedAt int64) error
+	UpdateTaskAssignee(ctx context.Context, taskID domain.ID, assigneeID *domain.ID, status domain.TaskStatus, reason *domain.BlockedReason, updatedAt int64) error
+	UpdateTaskIdleRuns(ctx context.Context, taskID domain.ID, idleRuns int, updatedAt int64) error
+	InsertTaskEvent(ctx context.Context, ev TaskEventRecord) error
+	ExpirePendingApprovalsByTasks(ctx context.Context, taskIDs []domain.ID, nowMs int64) (int, error)
+	ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]RunRecord, error)
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.

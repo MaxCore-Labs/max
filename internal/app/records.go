@@ -304,3 +304,28 @@ type EngineBinaryRecord struct {
 	Version     string
 	ConfirmedAt int64
 }
+
+// TaskEventRecord represents an append-only row in task_events.
+type TaskEventRecord struct {
+	ID            domain.ID
+	TaskID        domain.ID
+	Kind          string
+	ActorKind     string
+	ActorID       *domain.ID
+	TargetAgentID *domain.ID
+	Body          string
+	CreatedAt     int64
+}
+
+// TaskFilter scopes task list queries by visibility and optional filters.
+type TaskFilter struct {
+	ViewerAgentID string
+	ViewerTeamID  string
+	Status        string
+	AssigneeID    string
+	GoalID        string
+	RootID        string
+	Limit         int
+	BeforeTS      *int64
+	BeforeID      string
+}
