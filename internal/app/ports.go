@@ -110,11 +110,70 @@ type ConversationRecord struct {
 	ClosedAt   *int64
 }
 
+// RunRecord represents a row in the runs table.
+type RunRecord struct {
+	ID               domain.ID
+	AgentID          domain.ID
+	ConversationID   domain.ID
+	TaskID           *domain.ID
+	Status           domain.RunStatus
+	Priority         domain.Priority
+	Engine           domain.EngineName
+	Model            string
+	PGID             *int64
+	Attempt          int
+	Turns            int
+	InputTokens      int64
+	OutputTokens     int64
+	CachedReadTokens int64
+	ThoughtTokens    int64
+	NotionalMicroUSD int64
+	TouchedPathsJSON string
+	Error            *string
+	Summary          *string
+	VaultCommit      *string
+	StartedAt        int64
+	EndedAt          *int64
+}
+
+// CandidateAgent represents an eligible ready agent row joined with its team running counts.
+type CandidateAgent struct {
+	ID            domain.ID
+	TeamID        domain.ID
+	EnginesJSON   string
+	ModelsJSON    string
+	CooldownUntil int64
+	ReadyPriority int
+	TeamRunning   int
+	TeamMaxRun    int
+}
+
+// InboxItemRecord represents a row in inbox_items.
+type InboxItemRecord struct {
+	ID             domain.ID
+	Kind           string
+	Title          string
+	Body           string
+	RefKind        *string
+	RefID          *string
+	ConversationID *domain.ID
+	AgentID        *domain.ID
+	ChoicesJSON    string
+	Urgency        string
+	DedupeKey      *string
+	CreatedAt      int64
+}
+
 // Reader exposes non-transactional read queries backed by the reader pool.
 type Reader interface {
 	GetKV(ctx context.Context, key string) (val string, ok bool, err error)
 	GetAgent(ctx context.Context, id domain.ID) (AgentRecord, bool, error)
+	GetTeam(ctx context.Context, id domain.ID) (TeamRecord, bool, error)
+	GetConversation(ctx context.Context, id domain.ID) (ConversationRecord, bool, error)
+	GetRun(ctx context.Context, id domain.ID) (RunRecord, bool, error)
+	GetWakeup(ctx context.Context, agentID, wakeupID domain.ID) (WakeupRecord, bool, error)
 	ListQueuedWakeups(ctx context.Context, agentID domain.ID) ([]WakeupRecord, error)
+	ListInboxItems(ctx context.Context, limit int) ([]InboxItemRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -123,13 +182,22 @@ type Tx interface {
 	UpsertKV(ctx context.Context, key, val string, updatedAt int64) error
 	InsertTeam(ctx context.Context, t TeamRecord) error
 	InsertAgent(ctx context.Context, a AgentRecord) error
+	SetAgentCooldown(ctx context.Context, agentID domain.ID, cooldownUntil int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error
+	EnsureSystemConversation(ctx context.Context, agentID, newConvID domain.ID) (domain.ID, error)
 	SetAgentActiveRun(ctx context.Context, agentID domain.ID, runID *domain.ID) error
+	InsertRun(ctx context.Context, r RunRecord) error
+	AdjustTeamRunning(ctx context.Context, teamID domain.ID, delta int) error
 	InsertWakeupRaw(ctx context.Context, w WakeupRecord) error
 	FindWakeupByIdemKey(ctx context.Context, idemKey string) (domain.ID, bool, error)
 	CoalesceQueuedWakeup(ctx context.Context, agentID domain.ID, convID *domain.ID, kind domain.WakeKind, prio domain.Priority, payload string, notBefore int64) (domain.ID, bool, error)
 	CountQueuedWakeups(ctx context.Context, agentID domain.ID) (int, error)
 	RecomputeAgentReady(ctx context.Context, agentID domain.ID, nowMs int64) error
+	ListCandidateAgents(ctx context.Context, nowMs int64, engineMask, limit int) ([]CandidateAgent, error)
+	PeekTopDueWakeup(ctx context.Context, agentID domain.ID, nowMs int64) (WakeupRecord, bool, error)
+	DrainDueWakeupsForConv(ctx context.Context, agentID domain.ID, origConvID *domain.ID, targetConvID, runID domain.ID, nowMs int64, limit int) ([]WakeupRecord, error)
+	InsertInboxItem(ctx context.Context, item InboxItemRecord) error
+	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
