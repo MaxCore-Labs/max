@@ -34,8 +34,29 @@ type Grant struct {
 	Revoked            bool
 }
 
+// ClassifyBrowserTool classifies Playwright MCP 0.0.85 tools per Spike S1 (9 read-only R tools; everything else Ba).
+func ClassifyBrowserTool(name string) ToolClass {
+	switch name {
+	case "browser_navigate",
+		"browser_navigate_back",
+		"browser_wait_for",
+		"browser_snapshot",
+		"browser_find",
+		"browser_console_messages",
+		"browser_network_requests",
+		"browser_network_request",
+		"browser_take_screenshot":
+		return ToolClassR
+	default:
+		return ToolClassBa
+	}
+}
+
 // ClassifyBuiltin maps built-in CLI tool names to their base ToolClass (Spec 8.5.1 & 8.6).
 func ClassifyBuiltin(tool string) ToolClass {
+	if strings.HasPrefix(tool, "browser_") {
+		return ClassifyBrowserTool(tool)
+	}
 	switch tool {
 	case "Read", "Grep", "Glob", "WebSearch", "WebFetch",
 		"read_file", "grep_search", "find_by_name", "list_dir", "search_web", "read_url_content":

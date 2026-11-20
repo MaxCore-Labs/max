@@ -245,6 +245,20 @@ type RunSpec struct {
 	RunToken       string
 	Autonomy       domain.Autonomy
 	JSONSchema     string
+	ExtraMCP       []MCPServerSpec
+}
+
+// MCPServerSpec describes an additional per-session MCP server attached to a CLI run (e.g. browser).
+type MCPServerSpec struct {
+	Name, Command string
+	Args, Env     []string
+}
+
+// Browser manages seat-limited stealth browser leases and MCP specs (Spec 8.10 & S1).
+type Browser interface {
+	Acquire(ctx context.Context, runID domain.ID, prio domain.Priority, wait time.Duration) (endpoint string, err error)
+	Release(ctx context.Context, runID domain.ID) error
+	MCPSpec(endpoint string) MCPServerSpec
 }
 
 // EngineEvent is a normalized event emitted by an Engine driver during a run.
