@@ -115,9 +115,10 @@ func isQuotaLimitSignal(errText, stderrText, stopReason string) bool {
 }
 
 // executeSampleTask runs one fixed benchmark unit: read 3 files, write ~250-300 word summary.md.
-func executeSampleTask(ctx context.Context, agyBin, homeDir, workDir, phase string, worker, iter int) runMeasurement {
+// Named return `m` is required so the deferred runner cleanup populates StderrText, Notifications, and LimitHit.
+func executeSampleTask(ctx context.Context, agyBin, homeDir, workDir, phase string, worker, iter int) (m runMeasurement) {
 	t0 := time.Now()
-	m := runMeasurement{Phase: phase, Worker: worker, Iteration: iter}
+	m = runMeasurement{Phase: phase, Worker: worker, Iteration: iter}
 
 	_ = os.RemoveAll(workDir)
 	if err := seedThreeDocs(workDir); err != nil {

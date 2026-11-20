@@ -116,6 +116,7 @@ func isolatedEnv(homeDir string) []string {
 func startACPRunner(ctx context.Context, agyBin, homeDir string) (*acpRunner, error) {
 	cmd := exec.CommandContext(ctx, agyBin, "acp", "--include-default-customizations=false")
 	cmd.Env = isolatedEnv(homeDir)
+	cmd.WaitDelay = 2 * time.Second
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -311,11 +312,14 @@ func (r *acpRunner) close() {
 	_ = r.stdin.Close()
 	select {
 	case <-r.doneCh:
-	case <-time.After(3 * time.Second):
+	case <-time.After(2 * time.Second):
 		if r.cmd.Process != nil {
 			_ = r.cmd.Process.Kill()
 		}
 	}
-	<-r.stderrDone
 	_ = r.cmd.Wait()
+	select {
+	case <-r.stderrDone:
+	case <-time.After(500 * time.Millisecond):
+	}
 }
