@@ -40,6 +40,7 @@ type Result struct {
 // Service implements Max's core MCP tools independent of transport protocol.
 type Service struct {
 	store     app.Store
+	vault     app.Vault
 	vaultDir  string
 	clock     app.Clock
 	ids       app.IDGen
@@ -77,6 +78,12 @@ func (s *Service) WithCoord(coordSvc *coord.Service, actors *actor.Service) *Ser
 // WithMemory attaches an EpisodicMemory port to tools.Service.
 func (s *Service) WithMemory(mem app.EpisodicMemory) *Service {
 	s.memory = mem
+	return s
+}
+
+// WithVault attaches a git-backed Vault port to tools.Service for gated fact commits.
+func (s *Service) WithVault(v app.Vault) *Service {
+	s.vault = v
 	return s
 }
 
