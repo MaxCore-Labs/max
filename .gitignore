@@ -18,3 +18,5 @@ vault/
 web/node_modules/
 web/.svelte-kit/
 web/build/
+internal/adapter/httpapi/dist/*
+!internal/adapter/httpapi/dist/.gitkeep

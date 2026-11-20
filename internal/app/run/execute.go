@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -50,17 +51,21 @@ type Deps struct {
 	Vault           app.Vault
 	VaultDir        string
 	Permission      app.PermissionFunc
+	OnEvent         func(c actor.Claimed, ev app.EngineEvent)
+	PostRunAudit    func(ctx context.Context, runID domain.ID, slug string) []string
 	Clock           app.Clock
 	IDs             app.IDGen
 	WallTimeout     time.Duration
+	Cooldown        *time.Duration
 	FinalizeBackoff time.Duration
 }
 
 // Service orchestrates non-interactive CLI run execution and atomic post-run finalization.
 type Service struct {
-	deps   Deps
-	tokMu  sync.RWMutex
-	tokens map[string]TokenIdentity
+	deps    Deps
+	tokMu   sync.RWMutex
+	tokens  map[string]TokenIdentity
+	touched map[domain.ID][]string
 }
 
 // NewService constructs a run lifecycle Service.
@@ -78,9 +83,39 @@ func NewService(deps Deps) *Service {
 		deps.FinalizeBackoff = 100 * time.Millisecond
 	}
 	return &Service{
-		deps:   deps,
-		tokens: make(map[string]TokenIdentity),
+		deps:    deps,
+		tokens:  make(map[string]TokenIdentity),
+		touched: make(map[domain.ID][]string),
 	}
+}
+
+// SetPermission wires a PermissionFunc after construction (breaking circular init between run and permission).
+func (s *Service) SetPermission(fn app.PermissionFunc) {
+	s.deps.Permission = fn
+}
+
+// RegisterTestToken mints an active run token for unit testing PermissionFunc.
+func (s *Service) RegisterTestToken(id TokenIdentity) string {
+	return s.registerToken(id)
+}
+
+// RecordTouch records an in-scope relative vault path modified during runID.
+func (s *Service) RecordTouch(runID domain.ID, rel string) {
+	if runID == "" || rel == "" {
+		return
+	}
+	s.tokMu.Lock()
+	defer s.tokMu.Unlock()
+	if !slices.Contains(s.touched[runID], rel) {
+		s.touched[runID] = append(s.touched[runID], rel)
+	}
+}
+
+// TouchedPaths returns a copy of in-scope vault paths recorded for runID.
+func (s *Service) TouchedPaths(runID domain.ID) []string {
+	s.tokMu.RLock()
+	defer s.tokMu.RUnlock()
+	return slices.Clone(s.touched[runID])
 }
 
 // ResolveRunToken looks up an active run token; returns false as soon as the run leaves running state.
@@ -194,10 +229,26 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 		Autonomy:     ag.Autonomy,
 	}
 
-	out := s.driveEngine(ctx, eng, spec, conv.TurnsUsed)
+	out := s.driveEngine(ctx, c, eng, spec, conv.TurnsUsed)
 	out.SessionRebuilt = rebuilt
 
 	s.revokeToken(token)
+	merged := s.TouchedPaths(c.RunID)
+	if s.deps.PostRunAudit != nil {
+		for _, p := range s.deps.PostRunAudit(ctx, c.RunID, ag.Slug) {
+			if !slices.Contains(merged, p) {
+				merged = append(merged, p)
+			}
+		}
+	}
+	for _, p := range merged {
+		if !slices.Contains(out.TouchedPaths, p) {
+			out.TouchedPaths = append(out.TouchedPaths, p)
+		}
+	}
+	s.tokMu.Lock()
+	delete(s.touched, c.RunID)
+	s.tokMu.Unlock()
 
 	finCtx, finCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer finCancel()
@@ -207,7 +258,7 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 	return out, nil
 }
 
-func (s *Service) driveEngine(ctx context.Context, eng app.Engine, spec app.RunSpec, priorConvTurns int) Outcome {
+func (s *Service) driveEngine(ctx context.Context, claimed actor.Claimed, eng app.Engine, spec app.RunSpec, priorConvTurns int) Outcome {
 	runCtx, cancel := context.WithTimeout(ctx, s.deps.WallTimeout)
 	defer cancel()
 
@@ -238,6 +289,9 @@ func (s *Service) driveEngine(ctx context.Context, eng app.Engine, spec app.RunS
 	out.SessionID = spec.SessionID
 
 	for ev := range evCh {
+		if s.deps.OnEvent != nil {
+			s.deps.OnEvent(claimed, ev)
+		}
 		if !started && (ev.Type == "session" || ev.Type == "text_delta" || ev.Type == "tool_call" || ev.Type == "final") {
 			started = true
 			out.Turns = 1

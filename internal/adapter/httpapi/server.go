@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ type Deps struct {
 	CancelRun func(runID domain.ID)
 	Bus       *platform.Bus
 	Hub       *Hub
+	StaticFS  fs.FS
 	Config    platform.Config
 	Clock     app.Clock
 	IDs       app.IDGen
@@ -83,18 +85,27 @@ func New(deps Deps) (http.Handler, error) {
 
 	apiMux := http.NewServeMux()
 	gen.HandlerFromMux(strict, apiMux)
+	apiMux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSONError(w, http.StatusNotFound, "not_found")
+	})
+
+	staticHandler, cspHeader := newStaticHandler(deps.StaticFS)
 
 	rootMux := http.NewServeMux()
 	rootMux.HandleFunc("GET /api/v1/events", srv.handleStreamEvents)
 	rootMux.HandleFunc("GET /api/v1/runs/{runId}/stream", srv.handleStreamRun)
-	rootMux.Handle("/", apiMux)
+	rootMux.Handle("/api/", apiMux)
+	rootMux.HandleFunc("/api", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSONError(w, http.StatusNotFound, "not_found")
+	})
+	rootMux.Handle("/", staticHandler)
 
 	var h http.Handler = rootMux
 	h = RequireSession(deps.Store, deps.Clock)(h)
 	h = RateLimitLogin(deps.Clock)(h)
 	h = CheckOrigin(pubOrigin)(h)
 	h = CheckHost(allowedHosts)(h)
-	h = SecurityHeaders(h)
+	h = SecurityHeadersWithCSP(cspHeader)(h)
 	return h, nil
 }
 

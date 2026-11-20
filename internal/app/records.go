@@ -295,3 +295,12 @@ type AuditLogRecord struct {
 	Ref        string
 	DetailJSON string
 }
+
+// EngineBinaryRecord represents a confirmed CLI binary hash in engine_binaries.
+type EngineBinaryRecord struct {
+	Engine      domain.EngineName
+	Path        string
+	SHA256      string
+	Version     string
+	ConfirmedAt int64
+}

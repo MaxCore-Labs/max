@@ -16,6 +16,14 @@ import (
 
 const cspHeaderValue = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
 
+func buildCSPHeader(scriptHashes []string) string {
+	scriptSrc := "script-src 'self'"
+	if len(scriptHashes) > 0 {
+		scriptSrc += " " + strings.Join(scriptHashes, " ")
+	}
+	return "default-src 'self'; " + scriptSrc + "; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+}
+
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -24,14 +32,24 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 
 // SecurityHeaders attaches strict CSP (no unsafe-inline), nosniff, and clickjacking headers to all responses.
 func SecurityHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("Content-Security-Policy", cspHeaderValue)
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "no-referrer")
-		next.ServeHTTP(w, r)
-	})
+	return SecurityHeadersWithCSP(cspHeaderValue)(next)
+}
+
+// SecurityHeadersWithCSP attaches the provided CSP policy (without unsafe-inline) and security headers.
+func SecurityHeadersWithCSP(csp string) func(http.Handler) http.Handler {
+	if csp == "" {
+		csp = cspHeaderValue
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			h.Set("Content-Security-Policy", csp)
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("X-Frame-Options", "DENY")
+			h.Set("Referrer-Policy", "no-referrer")
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // CheckHost rejects HTTP requests whose Host header is not in allowedHosts (400 Bad Request).
@@ -116,11 +134,11 @@ func RateLimitLogin(clock app.Clock) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireSession enforces valid cookie session authentication on all /api/ routes except healthz and login.
+// RequireSession enforces valid cookie session authentication on all /api routes except healthz and login.
 func RequireSession(store app.Store, clock app.Clock) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasPrefix(r.URL.Path, "/api/") {
+			if r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/api/") {
 				next.ServeHTTP(w, r)
 				return
 			}

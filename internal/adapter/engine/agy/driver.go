@@ -50,6 +50,11 @@ func New(bin, home string, mode Mode, log *slog.Logger) *Driver {
 	if log == nil {
 		log = slog.Default()
 	}
+	if filepath.Base(bin) != bin {
+		if abs, err := filepath.Abs(bin); err == nil {
+			bin = abs
+		}
+	}
 	self, _ := os.Executable()
 	if self == "" {
 		self = "max"

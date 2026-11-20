@@ -3,9 +3,13 @@ export CGO_ENABLED := 0
 
 GO_DIRS := ./cmd/... ./internal/...
 
-.PHONY: check build test lint fmt-check linecount
+.PHONY: check build test lint fmt-check linecount web
 
 check: fmt-check vet lint test linecount
+
+web:
+	cd web && bun install --frozen-lockfile && bun run build
+	node -e "const fs=require('fs');fs.rmSync('internal/adapter/httpapi/dist',{recursive:true,force:true});fs.cpSync('web/build','internal/adapter/httpapi/dist',{recursive:true});fs.writeFileSync('internal/adapter/httpapi/dist/.gitkeep','');"
 
 fmt-check:
 	@unformatted="$$(gofmt -l cmd internal)"; \
@@ -28,5 +32,5 @@ linecount:
 	bash scripts/linecount.sh .
 	bash scripts/linecount_test.sh >/dev/null
 
-build:
+build: web
 	go build -o bin/max ./cmd/max

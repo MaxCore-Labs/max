@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // ACPScenario configures fakecli's simulated agy acp server for P1.18 driver tests.
@@ -243,6 +246,18 @@ func handleFakePrompt(
 				},
 			},
 		})
+	}
+
+	minMS, _ := strconv.Atoi(os.Getenv("FAKECLI_ACP_SLEEP_MIN_MS"))
+	maxMS, _ := strconv.Atoi(os.Getenv("FAKECLI_ACP_SLEEP_MAX_MS"))
+	if maxMS > 0 && maxMS >= minMS {
+		dur := minMS
+		if maxMS > minMS {
+			dur += rand.IntN(maxMS - minMS + 1)
+		}
+		if dur > 0 {
+			time.Sleep(time.Duration(dur) * time.Millisecond)
+		}
 	}
 
 	sendJSON(map[string]any{

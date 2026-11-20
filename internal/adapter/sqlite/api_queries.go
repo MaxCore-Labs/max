@@ -234,3 +234,37 @@ func (t *sqliteTx) AppendAuditLog(ctx context.Context, rec app.AuditLogRecord) e
 	}
 	return nil
 }
+
+func (r *sqliteReader) GetEngineBinary(ctx context.Context, engine domain.EngineName) (app.EngineBinaryRecord, bool, error) {
+	var rec app.EngineBinaryRecord
+	var engStr string
+	err := r.q.QueryRowContext(ctx, `
+		SELECT engine, path, sha256, version, confirmed_at
+		FROM engine_binaries WHERE engine = ?`, string(engine),
+	).Scan(&engStr, &rec.Path, &rec.SHA256, &rec.Version, &rec.ConfirmedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return app.EngineBinaryRecord{}, false, nil
+	}
+	if err != nil {
+		return app.EngineBinaryRecord{}, false, err
+	}
+	rec.Engine = domain.EngineName(engStr)
+	return rec, true, nil
+}
+
+func (t *sqliteTx) UpsertEngineBinary(ctx context.Context, rec app.EngineBinaryRecord) error {
+	_, err := t.q.ExecContext(ctx, `
+		INSERT INTO engine_binaries (engine, path, sha256, version, confirmed_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(engine) DO UPDATE SET
+			path = excluded.path,
+			sha256 = excluded.sha256,
+			version = excluded.version,
+			confirmed_at = excluded.confirmed_at`,
+		string(rec.Engine), rec.Path, rec.SHA256, rec.Version, rec.ConfirmedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert engine_binary: %w", err)
+	}
+	return nil
+}
