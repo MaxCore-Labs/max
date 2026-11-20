@@ -1,0 +1,78 @@
+version: "2"
+
+linters:
+  enable:
+    - depguard
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    depguard:
+      rules:
+        domain_pure:
+          files:
+            - "!$test"
+            - "**/internal/domain/**"
+          deny:
+            - pkg: "max/internal/**"
+              desc: "domain must remain pure and cannot import internal packages"
+            - pkg: "max/cmd/**"
+              desc: "domain cannot import cmd"
+        platform_pure:
+          files:
+            - "!$test"
+            - "**/internal/platform/**"
+          deny:
+            - pkg: "max/internal/app/**"
+              desc: "platform cannot import app"
+            - pkg: "max/internal/adapter/**"
+              desc: "platform cannot import adapters"
+            - pkg: "max/internal/testutil/**"
+              desc: "platform cannot import testutil"
+            - pkg: "max/cmd/**"
+              desc: "platform cannot import cmd"
+        app_hexagonal:
+          files:
+            - "!$test"
+            - "**/internal/app/**"
+          deny:
+            - pkg: "max/internal/adapter/**"
+              desc: "app layer cannot import adapters"
+            - pkg: "max/internal/testutil/**"
+              desc: "app layer cannot import testutil"
+            - pkg: "max/cmd/**"
+              desc: "app layer cannot import cmd"
+        adapter_sqlite:
+          files:
+            - "!$test"
+            - "**/internal/adapter/sqlite/**"
+          deny:
+            - pkg: "max/cmd/**"
+              desc: "adapters cannot import cmd"
+            - pkg: "max/internal/adapter/engine/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/httpapi/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/mcpserver/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/vaultgit/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/scopeaudit/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/browser/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/supervisor/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/mcpclient/**"
+              desc: "adapters cannot import sibling adapters"
+            - pkg: "max/internal/adapter/telegram/**"
+              desc: "adapters cannot import sibling adapters"
+        adapter_other:
+          files:
+            - "!$test"
+            - "**/internal/adapter/**"
+          deny:
+            - pkg: "max/cmd/**"
+              desc: "adapters cannot import cmd"
