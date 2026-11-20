@@ -111,6 +111,12 @@ type Reader interface {
 	ListProposals(ctx context.Context, status string, limit int) ([]ProposalRecord, error)
 	GetGrant(ctx context.Context, id domain.ID) (GrantRecord, bool, error)
 	ListGrantsByAgent(ctx context.Context, agentID domain.ID) ([]GrantRecord, error)
+	GetConnection(ctx context.Context, name string) (ConnectionRecord, bool, error)
+	ListConnections(ctx context.Context) ([]ConnectionRecord, error)
+	GetToolCall(ctx context.Context, runID domain.ID, toolUseID string) (ToolCallRecord, bool, error)
+	FindToolCallByIdem(ctx context.Context, idemKey string) (ToolCallRecord, bool, error)
+	FindDoneToolCallByTarget(ctx context.Context, convID domain.ID, toolName, targetVal string) (ToolCallRecord, bool, error)
+	ListToolCallsByRun(ctx context.Context, runID domain.ID) ([]ToolCallRecord, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -196,6 +202,10 @@ type Tx interface {
 	InsertGrant(ctx context.Context, g GrantRecord) error
 	RevokeGrant(ctx context.Context, id domain.ID, revokedAt int64) error
 	IncrementGrantUse(ctx context.Context, id domain.ID, day string) (allowed bool, err error)
+	UpsertConnection(ctx context.Context, c ConnectionRecord) error
+	DeleteConnection(ctx context.Context, name string) error
+	InsertToolCallStarted(ctx context.Context, tc ToolCallRecord) error
+	TransitionToolCallStatus(ctx context.Context, runID domain.ID, toolUseID, fromStatus, toStatus string, result *string, endedAt *int64) (bool, error)
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
@@ -264,6 +274,11 @@ type Browser interface {
 	Acquire(ctx context.Context, runID domain.ID, prio domain.Priority, wait time.Duration) (endpoint string, err error)
 	Release(ctx context.Context, runID domain.ID) error
 	MCPSpec(endpoint string) MCPServerSpec
+}
+
+// OutboundInvoker invokes a registered external MCP connection tool outside DB transactions.
+type OutboundInvoker interface {
+	Invoke(ctx context.Context, kind string, decryptedConfig []byte, tool string, input json.RawMessage) (string, error)
 }
 
 // EngineEvent is a normalized event emitted by an Engine driver during a run.
