@@ -1122,6 +1122,223 @@ paths:
         "409":
           $ref: "#/components/responses/ErrorResp"
 
+  /api/v1/auth/totp/setup:
+    post:
+      operationId: setupTotp
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "200":
+          description: Pending TOTP secret and otpauth URI
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotpSetupResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/auth/totp/confirm:
+    post:
+      operationId: confirmTotp
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TotpConfirmRequest"
+      responses:
+        "200":
+          description: TOTP enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "401":
+          $ref: "#/components/responses/ErrorResp"
+        "429":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/knowledge/facts:
+    get:
+      operationId: listFacts
+      responses:
+        "200":
+          description: Durable vault facts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactListResponse"
+
+  /api/v1/knowledge/learn/undo:
+    post:
+      operationId: undoLastLearning
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "200":
+          description: Reverted last learn commit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UndoLearnResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/proposals:
+    get:
+      operationId: listProposals
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Proposals list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalListResponse"
+
+  /api/v1/proposals/{proposalId}/decide:
+    post:
+      operationId: decideProposal
+      parameters:
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideProposalRequest"
+      responses:
+        "200":
+          description: Proposal decided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+        "404":
+          $ref: "#/components/responses/ErrorResp"
+        "409":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/connections:
+    get:
+      operationId: listConnections
+      responses:
+        "200":
+          description: Registered external MCP connections (write-only secrets)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionListResponse"
+
+  /api/v1/connections/{name}:
+    put:
+      operationId: upsertConnection
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertConnectionRequest"
+      responses:
+        "200":
+          description: Connection saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionItem"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+    delete:
+      operationId: deleteConnection
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "204":
+          description: Connection deleted
+
+  /api/v1/agents/{agentId}/grants:
+    get:
+      operationId: listAgentGrants
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent grants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantListResponse"
+    post:
+      operationId: createAgentGrant
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGrantRequest"
+      responses:
+        "201":
+          description: Grant created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantItem"
+        "400":
+          $ref: "#/components/responses/ErrorResp"
+
+  /api/v1/grants/{grantId}:
+    delete:
+      operationId: revokeGrant
+      parameters:
+        - name: grantId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKeyParam"
+      responses:
+        "204":
+          description: Grant revoked
+
 security:
   - cookieAuth: []
 
@@ -1189,6 +1406,8 @@ components:
         username:
           type: string
         password:
+          type: string
+        totpCode:
           type: string
 
     UserResponse:
@@ -1674,6 +1893,10 @@ components:
         deps:
           type: object
           additionalProperties:
+            type: string
+        warnings:
+          type: array
+          items:
             type: string
 
     EngineSettingItem:
@@ -2321,3 +2544,236 @@ components:
           type: string
         wakeupId:
           type: string
+
+    TotpSetupResponse:
+      type: object
+      required: [secret, otpauthUrl]
+      properties:
+        secret:
+          type: string
+        otpauthUrl:
+          type: string
+
+    TotpConfirmRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+
+    FactItem:
+      type: object
+      required: [slug, type, statement, confidence, evidenceMsgId]
+      properties:
+        slug:
+          type: string
+        type:
+          type: string
+        statement:
+          type: string
+        confidence:
+          type: integer
+        evidenceMsgId:
+          type: string
+        supersedes:
+          type: string
+        supersededBy:
+          type: string
+
+    FactListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactItem"
+
+    UndoLearnResponse:
+      type: object
+      required: [reverted]
+      properties:
+        reverted:
+          type: boolean
+
+    Proposal:
+      type: object
+      required: [id, kind, title, payload, status, createdAt]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        agentId:
+          type: string
+          nullable: true
+        targetPath:
+          type: string
+          nullable: true
+        title:
+          type: string
+        payload:
+          type: string
+        status:
+          type: string
+        decidedAt:
+          type: integer
+          format: int64
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+
+    ProposalListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Proposal"
+
+    DecideProposalRequest:
+      type: object
+      required: [approve]
+      properties:
+        approve:
+          type: boolean
+
+    ConnToolItem:
+      type: object
+      required: [name, write]
+      properties:
+        name:
+          type: string
+        write:
+          type: boolean
+        targetField:
+          type: string
+
+    ConnectionItem:
+      type: object
+      required: [name, kind, configured, enabled, tools]
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+        configured:
+          type: boolean
+        enabled:
+          type: boolean
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnToolItem"
+
+    ConnectionListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectionItem"
+
+    UpsertConnectionRequest:
+      type: object
+      required: [kind, enabled, tools]
+      properties:
+        kind:
+          type: string
+        enabled:
+          type: boolean
+        config:
+          type: object
+          additionalProperties: true
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnToolItem"
+
+    GrantConstraints:
+      type: object
+      properties:
+        equals:
+          type: object
+          additionalProperties:
+            type: string
+        oneOf:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        maxNumber:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+
+    GrantItem:
+      type: object
+      required: [id, agentId, connection, tool, constraints, allowedRootOrigins, usedToday, createdAt]
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        connection:
+          type: string
+        tool:
+          type: string
+        constraints:
+          $ref: "#/components/schemas/GrantConstraints"
+        allowedRootOrigins:
+          type: array
+          items:
+            type: string
+        maxPerDay:
+          type: integer
+          nullable: true
+        usedToday:
+          type: integer
+        expiresAt:
+          type: integer
+          format: int64
+          nullable: true
+        revokedAt:
+          type: integer
+          format: int64
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+
+    GrantListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GrantItem"
+
+    CreateGrantRequest:
+      type: object
+      required: [connection, tool]
+      properties:
+        connection:
+          type: string
+        tool:
+          type: string
+        constraints:
+          $ref: "#/components/schemas/GrantConstraints"
+        allowedRootOrigins:
+          type: array
+          items:
+            type: string
+        maxPerDay:
+          type: integer
+          nullable: true
+        expiresAt:
+          type: integer
+          format: int64
+          nullable: true

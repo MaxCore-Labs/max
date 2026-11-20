@@ -724,6 +724,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/totp/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["setupTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirmTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listFacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/learn/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["undoLastLearning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{proposalId}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConnections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connections/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["upsertConnection"];
+        post?: never;
+        delete: operations["deleteConnection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentGrants"];
+        put?: never;
+        post: operations["createAgentGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/grants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revokeGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -741,6 +901,7 @@ export interface components {
         LoginRequest: {
             username?: string;
             password: string;
+            totpCode?: string;
         };
         UserResponse: {
             id: string;
@@ -960,6 +1121,7 @@ export interface components {
             deps: {
                 [key: string]: string;
             };
+            warnings?: string[];
         };
         EngineSettingItem: {
             name: string;
@@ -1242,6 +1404,109 @@ export interface components {
         RunRoutineNowResponse: {
             taskId: string;
             wakeupId: string;
+        };
+        TotpSetupResponse: {
+            secret: string;
+            otpauthUrl: string;
+        };
+        TotpConfirmRequest: {
+            code: string;
+        };
+        FactItem: {
+            slug: string;
+            type: string;
+            statement: string;
+            confidence: number;
+            evidenceMsgId: string;
+            supersedes?: string;
+            supersededBy?: string;
+        };
+        FactListResponse: {
+            items: components["schemas"]["FactItem"][];
+        };
+        UndoLearnResponse: {
+            reverted: boolean;
+        };
+        Proposal: {
+            id: string;
+            kind: string;
+            agentId?: string | null;
+            targetPath?: string | null;
+            title: string;
+            payload: string;
+            status: string;
+            /** Format: int64 */
+            decidedAt?: number | null;
+            /** Format: int64 */
+            createdAt: number;
+        };
+        ProposalListResponse: {
+            items: components["schemas"]["Proposal"][];
+        };
+        DecideProposalRequest: {
+            approve: boolean;
+        };
+        ConnToolItem: {
+            name: string;
+            write: boolean;
+            targetField?: string;
+        };
+        ConnectionItem: {
+            name: string;
+            kind: string;
+            configured: boolean;
+            enabled: boolean;
+            tools: components["schemas"]["ConnToolItem"][];
+        };
+        ConnectionListResponse: {
+            items: components["schemas"]["ConnectionItem"][];
+        };
+        UpsertConnectionRequest: {
+            kind: string;
+            enabled: boolean;
+            config?: {
+                [key: string]: unknown;
+            };
+            tools: components["schemas"]["ConnToolItem"][];
+        };
+        GrantConstraints: {
+            equals?: {
+                [key: string]: string;
+            };
+            oneOf?: {
+                [key: string]: string[];
+            };
+            maxNumber?: {
+                [key: string]: number;
+            };
+        };
+        GrantItem: {
+            id: string;
+            agentId: string;
+            connection: string;
+            tool: string;
+            constraints: components["schemas"]["GrantConstraints"];
+            allowedRootOrigins: string[];
+            maxPerDay?: number | null;
+            usedToday: number;
+            /** Format: int64 */
+            expiresAt?: number | null;
+            /** Format: int64 */
+            revokedAt?: number | null;
+            /** Format: int64 */
+            createdAt: number;
+        };
+        GrantListResponse: {
+            items: components["schemas"]["GrantItem"][];
+        };
+        CreateGrantRequest: {
+            connection: string;
+            tool: string;
+            constraints?: components["schemas"]["GrantConstraints"];
+            allowedRootOrigins?: string[];
+            maxPerDay?: number | null;
+            /** Format: int64 */
+            expiresAt?: number | null;
         };
     };
     responses: {
@@ -2651,6 +2916,299 @@ export interface operations {
             400: components["responses"]["ErrorResp"];
             404: components["responses"]["ErrorResp"];
             409: components["responses"]["ErrorResp"];
+        };
+    };
+    setupTotp: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending TOTP secret and otpauth URI */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpSetupResponse"];
+                };
+            };
+            401: components["responses"]["ErrorResp"];
+        };
+    };
+    confirmTotp: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description TOTP enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            401: components["responses"]["ErrorResp"];
+            429: components["responses"]["ErrorResp"];
+        };
+    };
+    listFacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable vault facts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactListResponse"];
+                };
+            };
+        };
+    };
+    undoLastLearning: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reverted last learn commit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UndoLearnResponse"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    listProposals: {
+        parameters: {
+            query?: {
+                status?: string;
+                limit?: components["parameters"]["LimitParam"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proposals list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalListResponse"];
+                };
+            };
+        };
+    };
+    decideProposal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideProposalRequest"];
+            };
+        };
+        responses: {
+            /** @description Proposal decided */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+            404: components["responses"]["ErrorResp"];
+            409: components["responses"]["ErrorResp"];
+        };
+    };
+    listConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered external MCP connections (write-only secrets) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionListResponse"];
+                };
+            };
+        };
+    };
+    upsertConnection: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Connection saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionItem"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    deleteConnection: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAgentGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantListResponse"];
+                };
+            };
+        };
+    };
+    createAgentGrant: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Grant created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantItem"];
+                };
+            };
+            400: components["responses"]["ErrorResp"];
+        };
+    };
+    revokeGrant: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyParam"];
+            };
+            path: {
+                grantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grant revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
 }

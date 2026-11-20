@@ -57,6 +57,8 @@ func registerCoreTools(mcpSrv *mcp.Server, svc *tools.Service, caller tools.Call
 	})
 
 	registerCoordTools(mcpSrv, svc, caller)
+	registerMemoryTools(mcpSrv, svc, caller)
+	registerProposeTools(mcpSrv, svc, caller)
 }
 
 func maybeCap(svc *tools.Service, c tools.Caller, name string, r tools.Result) tools.Result {
@@ -64,6 +66,30 @@ func maybeCap(svc *tools.Service, c tools.Caller, name string, r tools.Result) t
 		return r
 	}
 	return svc.CapOutput(c, name, r.Text)
+}
+
+// RegisteredToolNames returns the exact MCP tool names exposed to agents (used in security boundary tests).
+func RegisteredToolNames(_ *tools.Service) []string {
+	return []string{
+		"ping",
+		"notify_owner",
+		"ask_owner",
+		"note_update",
+		"task_create",
+		"task_update",
+		"task_comment",
+		"task_get",
+		"task_list",
+		"delegate",
+		"message_agent",
+		"request_review",
+		"memory_search",
+		"memory_save",
+		"remember_fact",
+		"routine_propose",
+		"agent_propose",
+		"instruction_propose",
+	}
 }
 
 func toMCPResult(r tools.Result) *mcp.CallToolResult {

@@ -162,7 +162,9 @@ func BuildRunMessage(in RunInput) string {
 			parts = append(parts, "<history>\n"+hist+"\n</history>")
 		}
 		parts = append(parts, "<notes>\n"+notes+"\n</notes>")
-		parts = append(parts, "<recall>\n"+recall+"\n</recall>")
+		if recall != "" || len(in.Recall) > 0 {
+			parts = append(parts, "<recall>\n"+recall+"\n</recall>")
+		}
 		parts = append(parts, "<inbox>\n"+inbox+"\n</inbox>")
 		return strings.Join(parts, "\n\n")
 	}

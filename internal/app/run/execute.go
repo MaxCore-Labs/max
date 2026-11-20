@@ -51,6 +51,7 @@ type Deps struct {
 	Coord            *coord.Service
 	Engines          map[domain.EngineName]app.Engine
 	Prompts          app.PromptBuilder
+	Memory           app.EpisodicMemory
 	Vault            app.Vault
 	VaultDir         string
 	Permission       app.PermissionFunc
@@ -204,6 +205,7 @@ func (s *Service) Execute(ctx context.Context, c actor.Claimed) (Outcome, error)
 			return Outcome{}, fmt.Errorf("build run prompt: %w", err)
 		}
 	}
+	runPrompt = s.injectRecallBlock(ctx, effectiveClaim, runPrompt)
 	if (effectiveClaim.EngineChanged || rebuilt) && !strings.Contains(runPrompt, "<history>") {
 		hist := s.loadCarryOverHistory(ctx, effectiveClaim)
 		if hist == "" && rebuilt {

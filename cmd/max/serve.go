@@ -23,22 +23,25 @@ import (
 	"max/internal/adapter/mcpserver"
 	"max/internal/adapter/scopeaudit"
 	"max/internal/adapter/sqlite"
+	"max/internal/adapter/telegram"
 	"max/internal/adapter/vaultgit"
 	"max/internal/app"
 	"max/internal/app/actor"
 	"max/internal/app/agentsync"
 	"max/internal/app/approvals"
 	"max/internal/app/chat"
+	"max/internal/app/connections"
 	"max/internal/app/coord"
 	"max/internal/app/dispatch"
+	"max/internal/app/grants"
+	"max/internal/app/learn"
 	"max/internal/app/limits"
-	"max/internal/app/prompt"
+	"max/internal/app/outbox"
 	runapp "max/internal/app/run"
 	"max/internal/app/scheduler"
 	"max/internal/app/tools"
 	"max/internal/domain"
 	"max/internal/platform"
-	"max/prompts"
 )
 
 // ServeOptions configures runServeWithOptions (allowing tests to inject deterministic engines).
@@ -46,63 +49,6 @@ type ServeOptions struct {
 	Config   platform.Config
 	Engines  map[domain.EngineName]app.Engine
 	BinPaths map[domain.EngineName]string
-}
-
-type vaultPromptBuilder struct {
-	store app.Store
-	vault app.Vault
-	clock app.Clock
-	tz    string
-}
-
-func (b *vaultPromptBuilder) System(ctx context.Context, agentID domain.ID) (string, error) {
-	ag, ok, err := b.store.Read().GetAgent(ctx, agentID)
-	if err != nil || !ok {
-		sys, _ := prompt.BuildSystem(prompt.SystemInput{Kernel: prompts.Kernel})
-		return sys, nil
-	}
-	companyRaw, _ := b.vault.Read(ctx, "company/COMPANY.md")
-	var teamRaw []byte
-	if tm, tok, _ := b.store.Read().GetTeam(ctx, ag.TeamID); tok {
-		teamRaw, _ = b.vault.Read(ctx, fmt.Sprintf("teams/%s/TEAM.md", tm.Slug))
-	}
-	var roleBody string
-	if agentRaw, rerr := b.vault.Read(ctx, fmt.Sprintf("agents/%s/AGENT.md", ag.Slug)); rerr == nil {
-		if parsed, perr := agentsync.Parse(agentRaw); perr == nil {
-			roleBody = parsed.Body
-		}
-	}
-	sys, _ := prompt.BuildSystem(prompt.SystemInput{
-		Kernel:  prompts.Kernel,
-		Company: string(companyRaw),
-		Team:    string(teamRaw),
-		Role:    roleBody,
-	})
-	return sys, nil
-}
-
-func (b *vaultPromptBuilder) RunMessage(ctx context.Context, c app.Claimed) (string, error) {
-	ag, _, _ := b.store.Read().GetAgent(ctx, c.AgentID)
-	var notes string
-	if ag.Slug != "" {
-		if raw, err := b.vault.Read(ctx, fmt.Sprintf("agents/%s/notes/NOTES.md", ag.Slug)); err == nil {
-			notes = string(raw)
-		}
-	}
-	items := make([]prompt.InboxItem, 0, len(c.Wakeups))
-	for _, w := range c.Wakeups {
-		items = append(items, prompt.InboxItem{
-			ID:      w.ID,
-			Kind:    w.Kind,
-			Summary: string(w.Payload),
-		})
-	}
-	return prompt.BuildRunMessage(prompt.RunInput{
-		Now:   b.clock.Now(),
-		TZ:    b.tz,
-		Notes: notes,
-		Inbox: items,
-	}), nil
 }
 
 func defaultEngines(cfg platform.Config) (map[domain.EngineName]app.Engine, map[domain.EngineName]string) {
@@ -237,8 +183,12 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 			bus.Publish(platform.Event{Topic: topic, Type: typ, Data: data})
 		},
 	})
+	memSvc := sqlite.NewMemory(st, clk, ids)
+	connSvc, _ := connections.NewService(st, cfg.DataDir, clk)
+	grantSvc := grants.NewService(st, clk, ids)
+	learnSvc := learn.NewService(st, vault, engines[domain.EngineAgy], clk, ids)
 	apprSvc := approvals.NewService(st, actors, nil, clk, ids)
-	toolSvc := tools.NewService(st, cfg.VaultDir, clk, ids).WithCoord(coordSvc, actors)
+	toolSvc := tools.NewService(st, cfg.VaultDir, clk, ids).WithCoord(coordSvc, actors).WithMemory(memSvc).WithVault(vault)
 	mcpSrv := mcpserver.NewServer(toolSvc)
 	sockPath := filepath.Join(cfg.DataDir, "run", "max.sock")
 	if len(sockPath) > 100 {
@@ -253,6 +203,7 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 		Coord:    coordSvc,
 		Engines:  engines,
 		Prompts:  &vaultPromptBuilder{store: st, vault: vault, clock: clk, tz: cfg.TZ},
+		Memory:   memSvc,
 		Vault:    vault,
 		VaultDir: cfg.VaultDir,
 		Clock:    clk,
@@ -314,14 +265,32 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 		return snap
 	})
 
+	tgNotifier := telegram.New(telegram.Config{
+		BotToken:  cfg.TelegramBotToken,
+		OwnerIDs:  cfg.TelegramOwnerIDs,
+		PublicURL: cfg.PublicURL,
+		Clock:     clk,
+	})
+	outboxDisp := outbox.NewDispatcher(outbox.Config{
+		Store:      st,
+		Notifier:   tgNotifier,
+		Clock:      clk,
+		TZ:         cfg.TZ,
+		QuietHours: cfg.QuietHours,
+		PublicURL:  cfg.PublicURL,
+	})
+
 	handler, err := httpapi.New(httpapi.Deps{
-		Store:     st,
-		Vault:     vault,
-		AgentSync: syncSvc,
-		Actors:    actors,
-		Coord:     coordSvc,
-		Scheduler: sched,
-		Approvals: apprSvc,
+		Store:       st,
+		Vault:       vault,
+		AgentSync:   syncSvc,
+		Actors:      actors,
+		Coord:       coordSvc,
+		Scheduler:   sched,
+		Learn:       learnSvc,
+		Connections: connSvc,
+		Grants:      grantSvc,
+		Approvals:   apprSvc,
 		Chat:      chatSvc,
 		Slots:     slots,
 		Quota:     quota,
@@ -358,6 +327,7 @@ func runServeWithOptions(ctx context.Context, opts ServeOptions, stdout, stderr 
 	}
 	g.Go(func() error { return disp.Run(gctx) })
 	g.Go(func() error { return sched.Run(gctx, clk) })
+	g.Go(func() error { return outboxDisp.Run(gctx) })
 	g.Go(func() error {
 		tk := time.NewTicker(time.Hour)
 		defer tk.Stop()

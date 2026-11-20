@@ -58,13 +58,17 @@ func NewPermissionFunc(deps PermissionDeps) app.PermissionFunc {
 			}
 		}
 
-		rel, relOK := normalizeVaultRel(deps.VaultDir, ask.Path, ask.Input)
-		if !relOK {
-			return domain.Decision{Verdict: domain.Deny, Reason: "path outside vault or invalid relative path"}
-		}
-		searchRel, searchOK := normalizeVaultRel(deps.VaultDir, ask.SearchRoot, nil)
-		if !searchOK {
-			return domain.Decision{Verdict: domain.Deny, Reason: "search root outside vault"}
+		var rel, searchRel string
+		if !strings.HasPrefix(ask.ToolName, "browser_") {
+			var relOK, searchOK bool
+			rel, relOK = normalizeVaultRel(deps.VaultDir, ask.Path, ask.Input)
+			if !relOK {
+				return domain.Decision{Verdict: domain.Deny, Reason: "path outside vault or invalid relative path"}
+			}
+			searchRel, searchOK = normalizeVaultRel(deps.VaultDir, ask.SearchRoot, nil)
+			if !searchOK {
+				return domain.Decision{Verdict: domain.Deny, Reason: "search root outside vault"}
+			}
 		}
 
 		origin := domain.OriginOwner

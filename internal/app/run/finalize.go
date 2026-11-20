@@ -49,7 +49,12 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 		}
 	}
 
-	return s.deps.Store.WithTx(ctx, func(tx app.Tx) error {
+	var (
+		postTxRemember bool
+		postTxAgentID  domain.ID
+		postTxSummary  string
+	)
+	err := s.deps.Store.WithTx(ctx, func(tx app.Tx) error {
 		runRec, ok, err := tx.GetRun(ctx, runID)
 		if err != nil {
 			return err
@@ -318,6 +323,24 @@ func (s *Service) Finalize(ctx context.Context, runID domain.ID, o Outcome) erro
 		if err := tx.AdjustTeamRunning(ctx, ag.TeamID, -1); err != nil {
 			return err
 		}
+		needRem, cleanSum, mErr := s.recordMemoryInFinalizeTx(ctx, tx, runRec, o.Summary, nowMs)
+		if mErr != nil {
+			return mErr
+		}
+		postTxRemember = needRem
+		postTxAgentID = runRec.AgentID
+		postTxSummary = cleanSum
 		return tx.RecomputeAgentReady(ctx, runRec.AgentID, nowMs)
 	})
+	if err != nil {
+		return err
+	}
+	if postTxRemember && s.deps.Memory != nil {
+		if rErr := s.deps.Memory.Remember(ctx, postTxAgentID, postTxSummary, nil); rErr != nil {
+			_ = s.deps.Store.WithTx(ctx, func(tx app.Tx) error {
+				return enqueueMemoryOutbox(ctx, tx, runID, postTxAgentID, postTxSummary, nowMs)
+			})
+		}
+	}
+	return nil
 }

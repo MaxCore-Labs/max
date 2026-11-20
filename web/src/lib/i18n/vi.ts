@@ -161,7 +161,17 @@ export const vi: Record<string, string> = {
 	'routines.title': 'Lịch định kỳ (Routines)',
 	'routines.new': 'Tạo routine',
 	'routines.run_now': 'Chạy ngay',
-	'routines.external_label': 'Đọc nội dung người ngoài (email, form, webhook)'
+	'routines.external_label': 'Đọc nội dung người ngoài (email, form, webhook)',
+
+	// Knowledge, Proposals, Connections, Grants, TOTP (P3.09)
+	'knowledge.title': 'Tri thức & Lượt học',
+	'knowledge.undo_last': 'Hoàn tác lượt học gần nhất',
+	'knowledge.facts': 'Sự thật đã xác minh',
+	'knowledge.proposals': 'Đề xuất chờ duyệt',
+	'grants.title': 'Quyền đứng có ràng buộc (Grants)',
+	'grants.revoke': 'Thu hồi',
+	'connections.title': 'Kết nối MCP ngoài',
+	'totp.title': 'Xác thực 2 bước (TOTP)'
 };
 
 export function t(key: string, params?: Record<string, string | number>): string {

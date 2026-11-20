@@ -67,6 +67,12 @@ func (s *Server) GetStatus(ctx context.Context, _ gen.GetStatusRequestObject) (g
 		totalQueued += n
 	}
 
+	warnings := s.computeStatusWarnings(ctx)
+	var warnPtr *[]string
+	if len(warnings) > 0 {
+		warnPtr = &warnings
+	}
+
 	return gen.GetStatus200JSONResponse{
 		Engines: engList,
 		Queue: gen.QueueSummary{
@@ -76,6 +82,7 @@ func (s *Server) GetStatus(ctx context.Context, _ gen.GetStatusRequestObject) (g
 		Deps: map[string]string{
 			"sqlite": "ok",
 		},
+		Warnings: warnPtr,
 	}, nil
 }
 

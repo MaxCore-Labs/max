@@ -106,6 +106,18 @@ type Reader interface {
 	ListGoalsPage(ctx context.Context, status string, limit int, beforeTS *int64, beforeID string) ([]GoalRecord, error)
 	ListTaskEventsPage(ctx context.Context, taskID domain.ID, limit int, afterTS *int64, afterID string) ([]TaskEventRecord, error)
 	ListActiveRunsByTasks(ctx context.Context, taskIDs []domain.ID) ([]RunRecord, error)
+	ListThreadMessagesAsc(ctx context.Context, threadID domain.ID, afterMsgID *domain.ID, limit int) ([]MessageRecord, error)
+	GetProposal(ctx context.Context, id domain.ID) (ProposalRecord, bool, error)
+	ListProposals(ctx context.Context, status string, limit int) ([]ProposalRecord, error)
+	GetGrant(ctx context.Context, id domain.ID) (GrantRecord, bool, error)
+	ListGrantsByAgent(ctx context.Context, agentID domain.ID) ([]GrantRecord, error)
+	GetConnection(ctx context.Context, name string) (ConnectionRecord, bool, error)
+	ListConnections(ctx context.Context) ([]ConnectionRecord, error)
+	GetToolCall(ctx context.Context, runID domain.ID, toolUseID string) (ToolCallRecord, bool, error)
+	FindToolCallByIdem(ctx context.Context, idemKey string) (ToolCallRecord, bool, error)
+	FindDoneToolCallByTarget(ctx context.Context, convID domain.ID, toolName, targetVal string) (ToolCallRecord, bool, error)
+	ListToolCallsByRun(ctx context.Context, runID domain.ID) ([]ToolCallRecord, error)
+	GetOwnerTOTP(ctx context.Context) (TOTPRecord, bool, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -184,6 +196,23 @@ type Tx interface {
 	ExpirePendingApprovalsByTasks(ctx context.Context, taskIDs []domain.ID, nowMs int64) (int, error)
 	UpsertRoutineState(ctx context.Context, st RoutineStateRecord) error
 	SetAgentHeartbeatSchedule(ctx context.Context, agentID domain.ID, cronExpr string, nextAtMs *int64) error
+	MarkOutboxSent(ctx context.Context, id int64, sentAt int64) error
+	DeferOutboxUntil(ctx context.Context, id int64, nextAttemptAt int64) error
+	RecordOutboxFailure(ctx context.Context, id int64, attempts int, nextAttemptAt int64, dropSentAt *int64) error
+	SetThreadLearnedThrough(ctx context.Context, threadID, msgID domain.ID) error
+	InsertProposal(ctx context.Context, p ProposalRecord) error
+	UpdateProposalStatus(ctx context.Context, id domain.ID, status string, decidedAt int64) error
+	InsertGrant(ctx context.Context, g GrantRecord) error
+	RevokeGrant(ctx context.Context, id domain.ID, revokedAt int64) error
+	IncrementGrantUse(ctx context.Context, id domain.ID, day string) (allowed bool, err error)
+	UpsertConnection(ctx context.Context, c ConnectionRecord) error
+	DeleteConnection(ctx context.Context, name string) error
+	InsertToolCallStarted(ctx context.Context, tc ToolCallRecord) error
+	TransitionToolCallStatus(ctx context.Context, runID domain.ID, toolUseID, fromStatus, toStatus string, result *string, endedAt *int64) (bool, error)
+	SetOwnerTOTPPending(ctx context.Context, userID domain.ID, pending []byte, updatedAt int64) error
+	ConfirmOwnerTOTP(ctx context.Context, userID domain.ID, secret []byte, updatedAt int64) error
+	RecordOwnerTOTPFailure(ctx context.Context, userID domain.ID, attempts int, lockedUntil *int64, updatedAt int64) error
+	ResetOwnerTOTPFailures(ctx context.Context, userID domain.ID, updatedAt int64) error
 }
 
 // Store owns transactional writes (single writer) and concurrent read queries.
@@ -206,7 +235,11 @@ type Vault interface {
 	Push(ctx context.Context) error
 	Read(ctx context.Context, rel string) ([]byte, error)
 	Write(ctx context.Context, rel string, data []byte) error
+	Remove(ctx context.Context, rel string) error
 	ListDir(ctx context.Context, rel string) ([]string, error)
+	HeadSHA(ctx context.Context) (string, error)
+	RevertLastByPrefix(ctx context.Context, prefix string) (string, error)
+	MirrorSkills(ctx context.Context) error
 	RefuseIfProjectSettings(ctx context.Context) error
 }
 
@@ -235,6 +268,41 @@ type RunSpec struct {
 	RunToken       string
 	Autonomy       domain.Autonomy
 	JSONSchema     string
+	ExtraMCP       []MCPServerSpec
+}
+
+// MCPServerSpec describes an additional per-session MCP server attached to a CLI run (e.g. browser).
+type MCPServerSpec struct {
+	Name, Command string
+	Args, Env     []string
+}
+
+// Browser manages seat-limited stealth browser leases and MCP specs (Spec 8.10 & S1).
+type Browser interface {
+	Acquire(ctx context.Context, runID domain.ID, prio domain.Priority, wait time.Duration) (endpoint string, err error)
+	Release(ctx context.Context, runID domain.ID) error
+	MCPSpec(endpoint string) MCPServerSpec
+}
+
+// OutboundInvoker invokes a registered external MCP connection tool outside DB transactions.
+type OutboundInvoker interface {
+	Invoke(ctx context.Context, kind string, decryptedConfig []byte, tool string, input json.RawMessage) (string, error)
+}
+
+// Notification represents a redacted owner alert dispatched from the transactional outbox.
+type Notification struct {
+	ID      string
+	Topic   string
+	Kind    string
+	Title   string
+	Body    string
+	Urgency string
+	LinkURL string
+}
+
+// Notifier delivers owner notifications to external notify-only channels such as Telegram (Spec 8.5.3 & 8.15).
+type Notifier interface {
+	Notify(ctx context.Context, n Notification) error
 }
 
 // EngineEvent is a normalized event emitted by an Engine driver during a run.
@@ -266,4 +334,27 @@ type Engine interface {
 	Caps() EngineCaps
 	Run(ctx context.Context, spec RunSpec, perm PermissionFunc) (<-chan EngineEvent, error)
 	Health(ctx context.Context) EngineHealth
+}
+
+// MemoryHit represents a single episodic recall item returned by EpisodicMemory.Search.
+type MemoryHit struct {
+	ID             domain.ID
+	AuthorAgentID  domain.ID
+	ConversationID domain.ID
+	Scope          string
+	Content        string
+	Score          float64
+	CreatedAt      int64
+}
+
+// EpisodicMemory stores and searches agent/team episodic memories (Spec 8.9.4 & S2).
+type EpisodicMemory interface {
+	Search(ctx context.Context, agentID domain.ID, query string, limit int) ([]MemoryHit, error)
+	Remember(ctx context.Context, agentID domain.ID, content string, concepts []string) error
+	Healthy() bool
+}
+
+// TxMemoryWriter is an optional extension allowing SQLite-backed EpisodicMemory to write inside Finalize's transaction.
+type TxMemoryWriter interface {
+	RememberInTx(ctx context.Context, tx Tx, agentID, convID domain.ID, content string) error
 }

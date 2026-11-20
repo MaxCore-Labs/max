@@ -162,6 +162,20 @@ func (d *Driver) driveACPSession(
 		Args:    []string{"mcp"},
 		Env:     mcpEnv,
 	}}
+	for _, ex := range spec.ExtraMCP {
+		var exEnv []envVariable
+		for _, kv := range ex.Env {
+			if k, v, ok := strings.Cut(kv, "="); ok && k != "" {
+				exEnv = append(exEnv, envVariable{Name: k, Value: v})
+			}
+		}
+		mcpServers = append(mcpServers, mcpServerSpec{
+			Name:    ex.Name,
+			Command: ex.Command,
+			Args:    ex.Args,
+			Env:     exEnv,
+		})
+	}
 
 	var sessID int
 	if spec.SessionID == "" {

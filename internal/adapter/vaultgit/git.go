@@ -219,7 +219,8 @@ func (v *Vault) RefuseIfProjectSettings(_ context.Context) error {
 }
 
 func (v *Vault) runGitLocked(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	fullArgs := append([]string{"-c", "core.autocrlf=false"}, args...)
+	cmd := exec.CommandContext(ctx, "git", fullArgs...)
 	cmd.Dir = v.dir
 	cmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=Max",

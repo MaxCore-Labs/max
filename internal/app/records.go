@@ -378,3 +378,16 @@ type DueHeartbeatAgent struct {
 	Heartbeat string
 	LastRunAt *int64
 }
+
+// ProposalRecord represents a row in the proposals table.
+type ProposalRecord struct {
+	ID          domain.ID
+	Kind        string
+	AgentID     *domain.ID
+	TargetPath  *string
+	Title       string
+	PayloadJSON string
+	Status      string
+	DecidedAt   *int64
+	CreatedAt   int64
+}
