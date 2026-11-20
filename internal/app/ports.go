@@ -51,6 +51,8 @@ type Reader interface {
 	ListClaimedWakeupsByRun(ctx context.Context, runID domain.ID) ([]WakeupRecord, error)
 	ListRunEvents(ctx context.Context, runID domain.ID) ([]RunEventRecord, error)
 	ListInboxItems(ctx context.Context, limit int) ([]InboxItemRecord, error)
+	ListOutboxPending(ctx context.Context, limit int) ([]OutboxRecord, error)
+	CountQuestionsByRun(ctx context.Context, runID domain.ID) (int, error)
 }
 
 // Tx exposes write queries inside a single BEGIN IMMEDIATE SQLite transaction.
@@ -63,6 +65,7 @@ type Tx interface {
 	SetAgentLastRunAt(ctx context.Context, agentID domain.ID, lastRunAt int64) error
 	InsertConversation(ctx context.Context, c ConversationRecord) error
 	EnsureSystemConversation(ctx context.Context, agentID, newConvID domain.ID) (domain.ID, error)
+	SetConversationWaitingFor(ctx context.Context, convID domain.ID, waitingFor *string) error
 	UpdateConversationAfterRun(ctx context.Context, convID domain.ID, sessionsJSON string, lastEngine *string, addTurns int) error
 	InsertTask(ctx context.Context, tk TaskRecord) error
 	ClearTaskCheckout(ctx context.Context, runID domain.ID, updatedAt int64) error
@@ -84,6 +87,7 @@ type Tx interface {
 	RequeueWakeupsForRun(ctx context.Context, runID domain.ID, refundAttempt bool) error
 	UpsertQuotaLimit(ctx context.Context, engine domain.EngineName, limitedUntil, nowMs int64) error
 	InsertInboxItem(ctx context.Context, item InboxItemRecord) error
+	InsertOutbox(ctx context.Context, rec OutboxRecord) error
 	RecoverCrashState(ctx context.Context, nowMs int64, graceful bool, newID func() domain.ID) (int, error)
 }
 

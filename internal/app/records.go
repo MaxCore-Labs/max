@@ -186,6 +186,18 @@ type CandidateAgent struct {
 	TeamMaxRun    int
 }
 
+// OutboxRecord represents a row in the outbox table.
+type OutboxRecord struct {
+	ID            int64
+	Topic         string
+	PayloadJSON   string
+	DedupeKey     *string
+	Urgency       string
+	Attempts      int
+	NextAttemptAt int64
+	SentAt        *int64
+}
+
 // InboxItemRecord represents a row in inbox_items.
 type InboxItemRecord struct {
 	ID             domain.ID
